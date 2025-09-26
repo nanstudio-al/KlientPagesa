@@ -83,6 +83,7 @@ export class MemStorage implements IStorage {
   private services: Map<string, Service>;
   private clientServices: Map<string, ClientService>;
   private invoices: Map<string, Invoice>;
+  private invoiceServices: Map<string, InvoiceService>; // New collection for invoice services
 
   constructor() {
     this.users = new Map();
@@ -90,6 +91,7 @@ export class MemStorage implements IStorage {
     this.services = new Map();
     this.clientServices = new Map();
     this.invoices = new Map();
+    this.invoiceServices = new Map(); // Initialize new collection
   }
 
   // User operations
@@ -283,21 +285,39 @@ export class MemStorage implements IStorage {
   }
 
   // Invoice operations
-  async getInvoice(id: string): Promise<Invoice | undefined> {
-    return this.invoices.get(id);
+  async getInvoice(id: string): Promise<InvoiceWithServices | undefined> {
+    const invoice = this.invoices.get(id);
+    if (!invoice) return undefined;
+    
+    const services = await this.getInvoiceServices(invoice.id);
+    return { ...invoice, services };
   }
 
-  async getAllInvoices(): Promise<Invoice[]> {
-    return Array.from(this.invoices.values());
+  async getAllInvoices(): Promise<InvoiceWithServices[]> {
+    const invoicesList = Array.from(this.invoices.values());
+    
+    const result: InvoiceWithServices[] = [];
+    for (const invoice of invoicesList) {
+      const services = await this.getInvoiceServices(invoice.id);
+      result.push({ ...invoice, services });
+    }
+    return result;
   }
 
-  async getInvoicesByClient(clientId: string): Promise<Invoice[]> {
-    return Array.from(this.invoices.values()).filter(
+  async getInvoicesByClient(clientId: string): Promise<InvoiceWithServices[]> {
+    const invoicesList = Array.from(this.invoices.values()).filter(
       invoice => invoice.clientId === clientId
     );
+    
+    const result: InvoiceWithServices[] = [];
+    for (const invoice of invoicesList) {
+      const services = await this.getInvoiceServices(invoice.id);
+      result.push({ ...invoice, services });
+    }
+    return result;
   }
 
-  async createInvoice(insertInvoice: InsertInvoice): Promise<Invoice> {
+  async createInvoice(insertInvoice: InsertInvoice): Promise<InvoiceWithServices> {
     const id = randomUUID();
     
     // Generate next sequential invoice number
@@ -307,16 +327,67 @@ export class MemStorage implements IStorage {
     const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
     const invoiceNumber = maxNumber + 1;
     
+    // For MemStorage, simulate the dual-write structure using first service for legacy fields
+    const firstService = insertInvoice.services[0];
+    let totalAmount = 0;
+    
+    // Store invoice services in MemStorage for parity with DatabaseStorage
+    const serviceDetailsWithLines: (InvoiceService & { service: Service })[] = [];
+    
+    // Calculate total from all services and build service lines
+    for (const service of insertInvoice.services) {
+      const serviceDetail = this.services.get(service.serviceId);
+      if (!serviceDetail) {
+        throw new Error(`Service not found: ${service.serviceId}`);
+      }
+      
+      const unitPrice = service.unitPrice ? parseFloat(service.unitPrice) : parseFloat(serviceDetail.price);
+      const lineTotal = unitPrice * service.quantity;
+      totalAmount += lineTotal;
+      
+      const invoiceService: InvoiceService = {
+        id: randomUUID(),
+        invoiceId: id,
+        serviceId: service.serviceId,
+        quantity: service.quantity,
+        unitPrice: unitPrice.toFixed(2),
+        lineTotal: lineTotal.toFixed(2),
+      };
+      
+      this.invoiceServices.set(invoiceService.id, invoiceService);
+      serviceDetailsWithLines.push({
+        ...invoiceService,
+        service: serviceDetail,
+      });
+    }
+    
     const invoice: Invoice = {
-      ...insertInvoice,
       id,
+      clientId: insertInvoice.clientId,
+      dueDate: insertInvoice.dueDate,
       invoiceNumber,
       issueDate: new Date(),
       status: insertInvoice.status || 'pending',
-      paidDate: insertInvoice.paidDate || null
+      paidDate: insertInvoice.paidDate || null,
+      // Legacy fields for backward compatibility (matching DatabaseStorage behavior)
+      serviceId: firstService.serviceId,
+      amount: serviceDetailsWithLines[0].lineTotal, // Use first service amount to match DatabaseStorage
+      // New field
+      totalAmount: totalAmount.toFixed(2),
     };
+    
     this.invoices.set(id, invoice);
-    return invoice;
+    
+    // Add integrity check for MemStorage parity with DatabaseStorage
+    const calculatedTotal = serviceDetailsWithLines.reduce((sum, s) => sum + parseFloat(s.lineTotal), 0);
+    const storedTotal = parseFloat(invoice.totalAmount);
+    
+    if (Math.abs(calculatedTotal - storedTotal) > 0.01) {
+      throw new Error(`Total amount mismatch: calculated ${calculatedTotal}, stored ${storedTotal}`);
+    }
+    
+    // Return with actual services data
+    return { ...invoice, services: serviceDetailsWithLines };
   }
 
   async updateInvoiceStatus(id: string, status: PaymentStatus, paidDate?: Date): Promise<Invoice | undefined> {
@@ -332,22 +403,55 @@ export class MemStorage implements IStorage {
     return updatedInvoice;
   }
 
-  async getOverdueInvoices(): Promise<Invoice[]> {
+  async getOverdueInvoices(): Promise<InvoiceWithServices[]> {
     const now = new Date();
-    return Array.from(this.invoices.values()).filter(
+    const invoicesList = Array.from(this.invoices.values()).filter(
       invoice => new Date(invoice.dueDate) < now && invoice.status !== 'paid'
     );
+    
+    const result: InvoiceWithServices[] = [];
+    for (const invoice of invoicesList) {
+      const services = await this.getInvoiceServices(invoice.id);
+      result.push({ ...invoice, services });
+    }
+    return result;
   }
 
-  async getUpcomingInvoices(days: number): Promise<Invoice[]> {
+  async getUpcomingInvoices(days: number): Promise<InvoiceWithServices[]> {
     const now = new Date();
     const futureDate = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
-    return Array.from(this.invoices.values()).filter(
+    const invoicesList = Array.from(this.invoices.values()).filter(
       invoice => {
         const dueDate = new Date(invoice.dueDate);
         return dueDate >= now && dueDate <= futureDate && invoice.status !== 'paid';
       }
     );
+    
+    const result: InvoiceWithServices[] = [];
+    for (const invoice of invoicesList) {
+      const services = await this.getInvoiceServices(invoice.id);
+      result.push({ ...invoice, services });
+    }
+    return result;
+  }
+
+  // MemStorage implementation of getInvoiceServices with actual data
+  async getInvoiceServices(invoiceId: string): Promise<(InvoiceService & { service: Service })[]> {
+    const invoiceServicesList = Array.from(this.invoiceServices.values())
+      .filter(invoiceService => invoiceService.invoiceId === invoiceId);
+    
+    const result: (InvoiceService & { service: Service })[] = [];
+    for (const invoiceService of invoiceServicesList) {
+      const service = this.services.get(invoiceService.serviceId);
+      if (service) {
+        result.push({
+          ...invoiceService,
+          service,
+        });
+      }
+    }
+    
+    return result;
   }
 }
 
@@ -501,35 +605,155 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Invoice operations
-  async getInvoice(id: string): Promise<Invoice | undefined> {
+  async getInvoice(id: string): Promise<InvoiceWithServices | undefined> {
     const [invoice] = await db.select().from(invoices).where(eq(invoices.id, id));
-    return invoice;
-  }
-
-  async getAllInvoices(): Promise<Invoice[]> {
-    return await db.select().from(invoices);
-  }
-
-  async getInvoicesByClient(clientId: string): Promise<Invoice[]> {
-    return await db.select().from(invoices).where(eq(invoices.clientId, clientId));
-  }
-
-  async createInvoice(invoice: InsertInvoice): Promise<Invoice> {
-    // Generate next sequential invoice number
-    const existingInvoices = await db.select({ invoiceNumber: invoices.invoiceNumber }).from(invoices);
-    const existingNumbers = existingInvoices
-      .map(inv => inv.invoiceNumber)
-      .filter(num => num !== null && num !== undefined) as number[];
-    const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
-    const invoiceNumber = maxNumber + 1;
+    if (!invoice) return undefined;
     
-    const invoiceWithNumber = {
-      ...invoice,
-      invoiceNumber
-    };
+    const services = await this.getInvoiceServices(invoice.id);
+    return { ...invoice, services };
+  }
+
+  async getAllInvoices(): Promise<InvoiceWithServices[]> {
+    const invoicesList = await db.select().from(invoices);
     
-    const [newInvoice] = await db.insert(invoices).values(invoiceWithNumber).returning();
-    return newInvoice;
+    // Fetch services for each invoice
+    const result: InvoiceWithServices[] = [];
+    for (const invoice of invoicesList) {
+      const services = await this.getInvoiceServices(invoice.id);
+      result.push({ ...invoice, services });
+    }
+    return result;
+  }
+
+  async getInvoicesByClient(clientId: string): Promise<InvoiceWithServices[]> {
+    const invoicesList = await db.select().from(invoices).where(eq(invoices.clientId, clientId));
+    
+    // Fetch services for each invoice
+    const result: InvoiceWithServices[] = [];
+    for (const invoice of invoicesList) {
+      const services = await this.getInvoiceServices(invoice.id);
+      result.push({ ...invoice, services });
+    }
+    return result;
+  }
+
+  async createInvoice(invoice: InsertInvoice): Promise<InvoiceWithServices> {
+    return await db.transaction(async (tx) => {
+      // Generate next sequential invoice number 
+      const existingInvoices = await tx.select({ invoiceNumber: invoices.invoiceNumber }).from(invoices);
+      const existingNumbers = existingInvoices
+        .map(inv => inv.invoiceNumber)
+        .filter(num => num !== null && num !== undefined) as number[];
+      const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
+      let invoiceNumber = maxNumber + 1;
+      
+      // Calculate totals and prepare service lines
+      let totalAmount = 0;
+      const serviceLines: InsertInvoiceService[] = [];
+      
+      for (const service of invoice.services) {
+        // Get service details to determine unit price
+        const [serviceDetails] = await tx.select().from(services).where(eq(services.id, service.serviceId));
+        if (!serviceDetails) {
+          throw new Error(`Service not found: ${service.serviceId}`);
+        }
+        
+        const unitPrice = service.unitPrice ? parseFloat(service.unitPrice) : parseFloat(serviceDetails.price);
+        const lineTotal = unitPrice * service.quantity;
+        totalAmount += lineTotal;
+        
+        serviceLines.push({
+          serviceId: service.serviceId,
+          quantity: service.quantity,
+          unitPrice: unitPrice.toFixed(2),
+          lineTotal: lineTotal.toFixed(2),
+        });
+      }
+      
+      // Phase 3 dual-write: Write to both old and new structures with retry on unique violation
+      let newInvoice: Invoice;
+      let attempts = 0;
+      const maxAttempts = 5;
+      
+      while (attempts < maxAttempts) {
+        try {
+          const invoiceData = {
+            clientId: invoice.clientId,
+            dueDate: invoice.dueDate,
+            status: invoice.status || 'pending' as const,
+            paidDate: invoice.paidDate,
+            invoiceNumber,
+            // Legacy fields for backward compatibility
+            serviceId: invoice.services[0].serviceId, // First service for backward compatibility
+            amount: serviceLines[0].lineTotal, // First service amount for backward compatibility
+            // New field for multi-service support
+            totalAmount: totalAmount.toFixed(2),
+          };
+          
+          // Create the invoice record atomically
+          [newInvoice] = await tx.insert(invoices).values(invoiceData).returning();
+          break;
+        } catch (error: any) {
+          // Check if it's a unique constraint violation on invoice_number
+          if (error?.code === '23505' && error?.constraint?.includes('invoice_number')) {
+            attempts++;
+            if (attempts >= maxAttempts) {
+              throw new Error(`Failed to create invoice after ${maxAttempts} attempts due to number conflicts`);
+            }
+            // Increment invoice number and retry
+            invoiceNumber++;
+            continue;
+          }
+          // If it's not a unique constraint violation, rethrow the error
+          throw error;
+        }
+      }
+      
+      // Create invoice service records in the junction table atomically
+      for (const serviceLine of serviceLines) {
+        await tx.insert(invoiceServices).values({
+          invoiceId: newInvoice.id,
+          ...serviceLine,
+        });
+      }
+      
+      // Integrity check: Verify totalAmount equals sum of line totals
+      const storedServices = await tx
+        .select({ lineTotal: invoiceServices.lineTotal })
+        .from(invoiceServices)
+        .where(eq(invoiceServices.invoiceId, newInvoice.id));
+      
+      const calculatedTotal = storedServices.reduce((sum, s) => sum + parseFloat(s.lineTotal), 0);
+      const storedTotal = parseFloat(newInvoice.totalAmount);
+      
+      if (Math.abs(calculatedTotal - storedTotal) > 0.01) {
+        throw new Error(`Total amount mismatch: calculated ${calculatedTotal}, stored ${storedTotal}`);
+      }
+      
+      // Fetch services for the response (using transaction context)
+      const serviceRows = await tx
+        .select({
+          id: invoiceServices.id,
+          invoiceId: invoiceServices.invoiceId,
+          serviceId: invoiceServices.serviceId,
+          quantity: invoiceServices.quantity,
+          unitPrice: invoiceServices.unitPrice,
+          lineTotal: invoiceServices.lineTotal,
+          service: {
+            id: services.id,
+            name: services.name,
+            description: services.description,
+            price: services.price,
+            billingPeriod: services.billingPeriod,
+            createdAt: services.createdAt,
+          }
+        })
+        .from(invoiceServices)
+        .innerJoin(services, eq(invoiceServices.serviceId, services.id))
+        .where(eq(invoiceServices.invoiceId, newInvoice.id));
+      
+      return { ...newInvoice, services: serviceRows };
+    });
   }
 
   async updateInvoiceStatus(id: string, status: PaymentStatus, paidDate?: Date): Promise<Invoice | undefined> {
@@ -543,24 +767,64 @@ export class DatabaseStorage implements IStorage {
     return updatedInvoice;
   }
 
-  async getOverdueInvoices(): Promise<Invoice[]> {
+  async getOverdueInvoices(): Promise<InvoiceWithServices[]> {
     const now = new Date();
-    return await db.select().from(invoices)
+    const invoicesList = await db.select().from(invoices)
       .where(and(
         lt(invoices.dueDate, now),
         ne(invoices.status, 'paid')
       ));
+    
+    // Fetch services for each invoice
+    const result: InvoiceWithServices[] = [];
+    for (const invoice of invoicesList) {
+      const services = await this.getInvoiceServices(invoice.id);
+      result.push({ ...invoice, services });
+    }
+    return result;
   }
 
-  async getUpcomingInvoices(days: number): Promise<Invoice[]> {
+  async getUpcomingInvoices(days: number): Promise<InvoiceWithServices[]> {
     const now = new Date();
     const futureDate = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
-    return await db.select().from(invoices)
+    const invoicesList = await db.select().from(invoices)
       .where(and(
         gte(invoices.dueDate, now),
         lte(invoices.dueDate, futureDate),
         ne(invoices.status, 'paid')
       ));
+    
+    // Fetch services for each invoice
+    const result: InvoiceWithServices[] = [];
+    for (const invoice of invoicesList) {
+      const services = await this.getInvoiceServices(invoice.id);
+      result.push({ ...invoice, services });
+    }
+    return result;
+  }
+
+  // New method to fetch invoice services with service details
+  async getInvoiceServices(invoiceId: string): Promise<(InvoiceService & { service: Service })[]> {
+    return await db
+      .select({
+        id: invoiceServices.id,
+        invoiceId: invoiceServices.invoiceId,
+        serviceId: invoiceServices.serviceId,
+        quantity: invoiceServices.quantity,
+        unitPrice: invoiceServices.unitPrice,
+        lineTotal: invoiceServices.lineTotal,
+        service: {
+          id: services.id,
+          name: services.name,
+          description: services.description,
+          price: services.price,
+          billingPeriod: services.billingPeriod,
+          createdAt: services.createdAt,
+        }
+      })
+      .from(invoiceServices)
+      .innerJoin(services, eq(invoiceServices.serviceId, services.id))
+      .where(eq(invoiceServices.invoiceId, invoiceId));
   }
 }
 
