@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "./StatusBadge";
-import { Calendar, FileText, DollarSign, Download, Mail, Package } from "lucide-react";
+import { Calendar, FileText, Download, Mail, Package, Euro } from "lucide-react";
 import type { InvoiceWithServices } from "@shared/schema";
 
 interface InvoiceCardProps {
@@ -37,9 +37,9 @@ export function InvoiceCard({ invoice, onMarkPaid, onSendEmail, onDownload }: In
     return invoice.serviceName || "N/A";
   };
 
-  // Get the total amount (new or legacy)
+  // Get the total amount
   const getTotalAmount = () => {
-    return invoice.totalAmount || invoice.amount || "0";
+    return invoice.totalAmount || "0";
   };
 
   return (
@@ -64,7 +64,7 @@ export function InvoiceCard({ invoice, onMarkPaid, onSendEmail, onDownload }: In
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <DollarSign className="w-4 h-4 text-muted-foreground" />
+            <Euro className="w-4 h-4 text-muted-foreground" />
             <span className="text-xl font-mono font-semibold" data-testid={`text-invoice-amount-${invoice.id}`}>
               {getTotalAmount()}€
             </span>
