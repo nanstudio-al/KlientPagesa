@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "./StatusBadge";
-import { User, Building2, Mail, Phone, MapPin, Eye } from "lucide-react";
+import { User, Building2, Mail, Phone, MapPin, Eye, Edit, Trash2 } from "lucide-react";
 import type { Client, PaymentStatus } from "@shared/schema";
 
 interface ClientCardProps {
@@ -11,10 +11,12 @@ interface ClientCardProps {
     totalPending: number;
     overdueCount: number;
   };
-  onView: () => void;
+  onView?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
-export function ClientCard({ client, onView }: ClientCardProps) {
+export function ClientCard({ client, onView, onEdit, onDelete }: ClientCardProps) {
   const getClientStatus = () => {
     // Show client type and status instead of payment status
     if (client.isCompany) {
@@ -96,15 +98,39 @@ export function ClientCard({ client, onView }: ClientCardProps) {
           </div>
         )}
 
-        <Button 
-          onClick={onView} 
-          className="w-full" 
-          variant="outline"
-          data-testid={`button-view-client-${client.id}`}
-        >
-          <Eye className="w-4 h-4 mr-2" />
-          Shiko detajet
-        </Button>
+        <div className="flex gap-2">
+          {onView && (
+            <Button 
+              onClick={onView} 
+              className="flex-1" 
+              variant="outline"
+              data-testid={`button-view-client-${client.id}`}
+            >
+              <Eye className="w-4 h-4 mr-2" />
+              Shiko detajet
+            </Button>
+          )}
+          {onEdit && (
+            <Button 
+              onClick={onEdit} 
+              size="icon"
+              variant="outline"
+              data-testid={`button-edit-client-${client.id}`}
+            >
+              <Edit className="w-4 h-4" />
+            </Button>
+          )}
+          {onDelete && (
+            <Button 
+              onClick={onDelete} 
+              size="icon"
+              variant="outline"
+              data-testid={`button-delete-client-${client.id}`}
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

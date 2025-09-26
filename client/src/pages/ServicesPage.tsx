@@ -88,7 +88,7 @@ export default function ServicesPage() {
   };
 
   const handleEditService = (serviceId: string) => {
-    const service = services.find((s: any) => s.id === serviceId);
+    const service = (services as any[]).find((s: any) => s.id === serviceId);
     if (service) {
       setEditingService(service);
       setIsFormOpen(true);

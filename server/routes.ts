@@ -687,6 +687,165 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Invoice PDF download endpoint
+  app.get("/api/invoices/:id/download", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const invoice = await storage.getInvoice(id);
+      
+      if (!invoice) {
+        return res.status(404).json({ error: 'Invoice not found' });
+      }
+
+      // Get client and service details
+      const client = await storage.getClient(invoice.clientId);
+      const service = await storage.getService(invoice.serviceId);
+      
+      if (!client || !service) {
+        return res.status(404).json({ error: 'Client or service not found' });
+      }
+
+      // Generate simple PDF-like HTML content
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Fatura ${invoice.id}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 40px; }
+            .header { border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
+            .invoice-number { font-size: 24px; font-weight: bold; color: #333; }
+            .client-info, .invoice-details { margin-bottom: 30px; }
+            .label { font-weight: bold; color: #555; }
+            .amount { font-size: 20px; font-weight: bold; color: #2563eb; }
+            .status { padding: 4px 12px; border-radius: 4px; color: white; }
+            .status.paid { background-color: #16a34a; }
+            .status.pending { background-color: #f59e0b; }
+            .status.overdue { background-color: #dc2626; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="invoice-number">FATURA #${invoice.id.slice(-8).toUpperCase()}</div>
+            <p>Data e lëshimit: ${new Date(invoice.issueDate).toLocaleDateString('sq-AL')}</p>
+            <p>Skadenca: ${new Date(invoice.dueDate).toLocaleDateString('sq-AL')}</p>
+          </div>
+          
+          <div class="client-info">
+            <h3>Faturuar për:</h3>
+            <p><span class="label">Klienti:</span> ${client.name}</p>
+            <p><span class="label">Email:</span> ${client.email}</p>
+            ${client.phone ? `<p><span class="label">Telefoni:</span> ${client.phone}</p>` : ''}
+            ${client.address ? `<p><span class="label">Adresa:</span> ${client.address}</p>` : ''}
+            ${client.taxId ? `<p><span class="label">Numri Fiskal:</span> ${client.taxId}</p>` : ''}
+          </div>
+          
+          <div class="invoice-details">
+            <h3>Detajet e shërbimit:</h3>
+            <p><span class="label">Shërbimi:</span> ${service.name}</p>
+            <p><span class="label">Përshkrimi:</span> ${service.description || 'N/A'}</p>
+            <p><span class="label">Çmimi:</span> <span class="amount">${invoice.amount}€</span></p>
+            <p><span class="label">Statusi:</span> 
+              <span class="status ${invoice.status}">
+                ${invoice.status === 'paid' ? 'Paguar' : invoice.status === 'pending' ? 'Në pritje' : 'Vonesa'}
+              </span>
+            </p>
+            ${invoice.paidDate ? `<p><span class="label">Data e pagesës:</span> ${new Date(invoice.paidDate).toLocaleDateString('sq-AL')}</p>` : ''}
+          </div>
+          
+          <div style="margin-top: 50px; text-align: center; color: #666; font-size: 12px;">
+            <p>Ky dokument është gjeneruar automatikisht nga sistemi i menaxhimit të klientëve</p>
+          </div>
+        </body>
+        </html>
+      `;
+
+      res.setHeader('Content-Type', 'text/html');
+      res.setHeader('Content-Disposition', `attachment; filename="fatura-${invoice.id.slice(-8)}.html"`);
+      res.send(htmlContent);
+    } catch (error) {
+      console.error('Download invoice error:', error);
+      res.status(500).json({ error: 'Failed to generate invoice document' });
+    }
+  });
+
+  // Invoice email sending endpoint  
+  app.post("/api/invoices/:id/send-email", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const invoice = await storage.getInvoice(id);
+      
+      if (!invoice) {
+        return res.status(404).json({ error: 'Invoice not found' });
+      }
+
+      // Get client and service details
+      const client = await storage.getClient(invoice.clientId);
+      const service = await storage.getService(invoice.serviceId);
+      
+      if (!client || !service) {
+        return res.status(404).json({ error: 'Client or service not found' });
+      }
+
+      // Check if SendGrid API key is available
+      if (!process.env.SENDGRID_API_KEY) {
+        return res.status(500).json({ 
+          error: 'Email service not configured. SENDGRID_API_KEY is missing.' 
+        });
+      }
+
+      try {
+        const sgMail = require('@sendgrid/mail');
+        sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+        const emailContent = `
+          Përshëndetje ${client.name},
+
+          Ju dërgojmë faturën tuaj për shërbimin: ${service.name}
+          
+          Detajet e faturës:
+          - Numri i faturës: #${invoice.id.slice(-8).toUpperCase()}
+          - Shuma: ${invoice.amount}€
+          - Data e lëshimit: ${new Date(invoice.issueDate).toLocaleDateString('sq-AL')}
+          - Skadenca: ${new Date(invoice.dueDate).toLocaleDateString('sq-AL')}
+          - Statusi: ${invoice.status === 'paid' ? 'Paguar' : invoice.status === 'pending' ? 'Në pritje' : 'Vonesa'}
+          
+          ${invoice.status !== 'paid' ? 'Ju lutem kryeni pagesën brenda afatit të caktuar.' : 'Faleminderit për pagesën!'}
+          
+          Me respekt,
+          Ekipi i Menaxhimit të Klientëve
+        `;
+
+        const msg = {
+          to: client.email,
+          from: 'noreply@example.com', // Should be configured with your verified domain
+          subject: `Fatura #${invoice.id.slice(-8).toUpperCase()} - ${service.name}`,
+          text: emailContent,
+          html: emailContent.replace(/\\n/g, '<br>')
+        };
+
+        await sgMail.send(msg);
+        
+        res.json({ 
+          success: true, 
+          message: 'Email u dërgua me sukses!',
+          recipient: client.email 
+        });
+        
+      } catch (emailError) {
+        console.error('SendGrid error:', emailError);
+        res.status(500).json({ 
+          error: 'Failed to send email. Please check your SendGrid configuration.',
+          details: emailError instanceof Error ? emailError.message : 'Unknown error'
+        });
+      }
+    } catch (error) {
+      console.error('Send invoice email error:', error);
+      res.status(500).json({ error: 'Failed to send invoice email' });
+    }
+  });
+
   // Dashboard analytics routes
   app.get("/api/dashboard/stats", async (req, res) => {
     try {
