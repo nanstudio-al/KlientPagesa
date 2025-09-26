@@ -1065,35 +1065,141 @@ export async function registerRoutes(app: Express): Promise<Server> {
         </html>
       `;
 
-      // Generate PDF using Puppeteer
-      const browser = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-      });
-      
-      const page = await browser.newPage();
-      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-      
-      const pdfBuffer = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        margin: {
-          top: '0.5in',
-          right: '0.5in',
-          bottom: '0.5in',
-          left: '0.5in'
-        }
-      });
-      
-      await browser.close();
+      // Try PDF generation with fallback to HTML
+      try {
+        // Generate PDF using Puppeteer with Replit-compatible settings
+        const browser = await puppeteer.launch({
+          headless: true,
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--disable-gpu',
+            '--disable-web-security',
+            '--disable-features=VizDisplayCompositor'
+          ],
+          executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
+        });
+        
+        const page = await browser.newPage();
+        await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+        
+        const pdfBuffer = await page.pdf({
+          format: 'A4',
+          printBackground: true,
+          margin: {
+            top: '0.5in',
+            right: '0.5in',
+            bottom: '0.5in',
+            left: '0.5in'
+          }
+        });
+        
+        await browser.close();
 
-      // Set headers for PDF download
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="fatura-${invoice.id.slice(-8)}.pdf"`);
-      res.setHeader('Content-Length', pdfBuffer.length);
-      
-      // Send PDF buffer
-      res.send(pdfBuffer);
+        // Set headers for PDF download
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="fatura-${invoice.id.slice(-8)}.pdf"`);
+        res.setHeader('Content-Length', pdfBuffer.length);
+        
+        // Send PDF buffer
+        res.send(pdfBuffer);
+        
+      } catch (pdfError) {
+        console.log('PDF generation failed, falling back to printable HTML:', pdfError instanceof Error ? pdfError.message : String(pdfError));
+        
+        // Fallback: Return enhanced HTML with print functionality
+        const printableHtml = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Fatura ${invoice.id}</title>
+            <style>
+              ${htmlContent.split('<style>')[1].split('</style>')[0]}
+              
+              .print-actions { 
+                margin-bottom: 30px;
+                text-align: center;
+                background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+                padding: 20px;
+                border-radius: 12px;
+                box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+              }
+              
+              .print-actions button { 
+                background: white;
+                color: #1d4ed8;
+                border: none;
+                padding: 14px 28px;
+                border-radius: 8px;
+                margin: 0 10px;
+                cursor: pointer;
+                font-size: 16px;
+                font-weight: 600;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                transition: all 0.2s ease;
+              }
+              
+              .print-actions button:hover { 
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+              }
+              
+              .print-actions button.secondary { 
+                background: transparent;
+                color: white;
+                border: 2px solid white;
+              }
+              
+              .print-actions button.secondary:hover { 
+                background: white;
+                color: #1d4ed8;
+              }
+              
+              @media print {
+                .print-actions { display: none !important; }
+                body { padding: 20px; }
+                .invoice-container { box-shadow: none; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="print-actions">
+              <button id="print-btn">📄 Printo si PDF</button>
+              <button id="close-btn" class="secondary">❌ Mbyll</button>
+              <div style="margin-top: 10px; color: white; font-size: 14px; opacity: 0.8;">
+                Sistemi po punon në modalitetin HTML. Përdorni "Printo si PDF" për të ruajtur si PDF.
+              </div>
+            </div>
+            
+            ${htmlContent.split('<body>')[1].split('</body>')[0]}
+            
+            <script>
+              window.addEventListener('load', function() {
+                console.log('Fatura e ngarkuar në modalitetin HTML. Klikoni "Printo si PDF" për të ruajtur si PDF.');
+                
+                document.getElementById('print-btn').addEventListener('click', function() {
+                  window.print();
+                });
+                
+                document.getElementById('close-btn').addEventListener('click', function() {
+                  window.close();
+                });
+              });
+            </script>
+          </body>
+          </html>
+        `;
+        
+        // Return HTML with print functionality
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Content-Disposition', `inline; filename="fatura-${invoice.id.slice(-8)}.html"`);
+        res.send(printableHtml);
+      }
       
     } catch (error) {
       console.error('PDF generation error:', error);
