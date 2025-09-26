@@ -88,13 +88,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // For development, also allow common dev origins
+      // For development, also allow common dev origins and Replit patterns
       if (isDevelopment) {
         allowedOrigins.push('http://localhost:5000', 'https://localhost:5000');
+        
+        // Add Replit development URL patterns
+        const host = req.get('host');
+        if (host && host.includes('.replit.dev')) {
+          allowedOrigins.push(`https://${host}`);
+          allowedOrigins.push(`http://${host}`);
+        }
+      }
+      
+      // Debug logging for CSRF protection in development
+      if (isDevelopment) {
+        console.log('CSRF Debug:', {
+          origin,
+          referer,
+          currentOrigin,
+          allowedOrigins,
+          host: req.get('host')
+        });
       }
       
       // Check if Origin header matches allowed origins
       if (origin && !allowedOrigins.includes(origin)) {
+        console.error('CSRF: Origin not allowed:', { origin, allowedOrigins });
         return res.status(403).json({ error: 'Forbidden: Invalid origin' });
       }
       
@@ -764,28 +783,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
         </html>
       `;
 
-      // Generate PDF using Puppeteer
-      const puppeteer = require('puppeteer');
-      const browser = await puppeteer.launch({
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-      });
-      const page = await browser.newPage();
-      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-      const pdfBuffer = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        margin: {
-          top: '20mm',
-          right: '20mm',
-          bottom: '20mm',
-          left: '20mm'
-        }
-      });
-      await browser.close();
-
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="fatura-${invoice.id.slice(-8)}.pdf"`);
-      res.send(pdfBuffer);
+      // Return formatted HTML for browser PDF generation (more reliable than server-side Puppeteer)
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Content-Disposition', `inline; filename="fatura-${invoice.id.slice(-8)}.html"`);
+      
+      // Enhanced HTML with print-specific CSS and auto-print functionality
+      const printableHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Fatura ${invoice.id}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 40px; }
+            .header { border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
+            .invoice-number { font-size: 24px; font-weight: bold; color: #333; }
+            .client-info, .invoice-details { margin-bottom: 30px; }
+            .label { font-weight: bold; color: #555; }
+            .amount { font-size: 20px; font-weight: bold; color: #2563eb; }
+            .status { padding: 4px 12px; border-radius: 4px; color: white; }
+            .status.paid { background-color: #16a34a; }
+            .status.pending { background-color: #f59e0b; }
+            .status.overdue { background-color: #dc2626; }
+            .print-actions { margin: 20px 0; text-align: center; background: #f8f9fa; padding: 15px; border-radius: 8px; }
+            .print-actions button { 
+              background: #2563eb; color: white; border: none; padding: 12px 24px; 
+              border-radius: 6px; margin: 0 10px; cursor: pointer; font-size: 16px;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .print-actions button:hover { background: #1d4ed8; transform: translateY(-1px); }
+            .print-actions button.secondary { background: #6b7280; }
+            .print-actions button.secondary:hover { background: #4b5563; }
+            @media print {
+              .print-actions { display: none; }
+              body { margin: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="print-actions">
+            <button id="print-btn">📄 Printo si PDF</button>
+            <button id="close-btn" class="secondary">❌ Mbyll</button>
+          </div>
+          
+          <div class="header">
+            <div class="invoice-number">FATURA #${invoice.id.slice(-8).toUpperCase()}</div>
+            <p>Data e lëshimit: ${new Date(invoice.issueDate).toLocaleDateString('sq-AL')}</p>
+            <p>Skadenca: ${new Date(invoice.dueDate).toLocaleDateString('sq-AL')}</p>
+          </div>
+          
+          <div class="client-info">
+            <h3>Faturuar për:</h3>
+            <p><span class="label">Klienti:</span> ${client.name}</p>
+            <p><span class="label">Email:</span> ${client.email}</p>
+            ${client.phone ? `<p><span class="label">Telefoni:</span> ${client.phone}</p>` : ''}
+            ${client.address ? `<p><span class="label">Adresa:</span> ${client.address}</p>` : ''}
+            ${client.taxId ? `<p><span class="label">Numri Fiskal:</span> ${client.taxId}</p>` : ''}
+          </div>
+          
+          <div class="invoice-details">
+            <h3>Detajet e shërbimit:</h3>
+            <p><span class="label">Shërbimi:</span> ${service.name}</p>
+            <p><span class="label">Përshkrimi:</span> ${service.description || 'N/A'}</p>
+            <p><span class="label">Çmimi:</span> <span class="amount">${invoice.amount}€</span></p>
+            <p><span class="label">Statusi:</span> 
+              <span class="status ${invoice.status}">
+                ${invoice.status === 'paid' ? 'Paguar' : invoice.status === 'pending' ? 'Në pritje' : 'Vonesa'}
+              </span>
+            </p>
+            ${invoice.paidDate ? `<p><span class="label">Data e pagesës:</span> ${new Date(invoice.paidDate).toLocaleDateString('sq-AL')}</p>` : ''}
+          </div>
+          
+          <div style="margin-top: 50px; text-align: center; color: #666; font-size: 12px;">
+            <p>Ky dokument është gjeneruar automatikisht nga sistemi i menaxhimit të klientëve</p>
+          </div>
+          
+          <script>
+            // Auto-focus for better print experience and button handlers
+            window.addEventListener('load', function() {
+              console.log('Fatura e ngarkuar. Klikoni "Printo si PDF" për të ruajtur si PDF.');
+              
+              // Add event listeners for buttons (CSP-compliant)
+              document.getElementById('print-btn').addEventListener('click', function() {
+                window.print();
+              });
+              
+              document.getElementById('close-btn').addEventListener('click', function() {
+                window.close();
+              });
+            });
+          </script>
+        </body>
+        </html>
+      `;
+      
+      res.send(printableHtml);
     } catch (error) {
       console.error('Download invoice error details:', {
         message: error instanceof Error ? error.message : String(error),
@@ -824,8 +916,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Development mode fallback - simulate email sending without SendGrid
+      if (isDevelopment) {
+        console.log('📧 Development Mode: Simulating email send');
+        console.log(`📧 To: ${client.email}`);
+        console.log(`📧 Subject: Fatura #${invoice.id.slice(-8).toUpperCase()} - ${service.name}`);
+        console.log(`📧 Invoice ID: ${invoice.id}`);
+        console.log(`📧 Amount: ${invoice.amount}€`);
+        
+        // Simulate a small delay to make it feel realistic
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        res.json({ 
+          success: true, 
+          message: 'Email u dërgua me sukses! (Development Mode)',
+          recipient: client.email,
+          mode: 'development'
+        });
+        return;
+      }
+
       try {
-        const sgMail = require('@sendgrid/mail');
+        // Dynamically import SendGrid only in production
+        const sgMail = (await import('@sendgrid/mail')).default;
         sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
         const emailContent = `
