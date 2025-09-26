@@ -736,12 +736,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const logoBase64 = "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...";
 
       // Generate HTML content for PDF with embedded logo
+      // HTML escape function to prevent XSS attacks
+      const escapeHtml = (text: string | null | undefined): string => {
+        if (!text) return '';
+        return String(text)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      };
+
       const htmlContent = `
         <!DOCTYPE html>
         <html>
         <head>
           <meta charset="utf-8">
-          <title>Fatura ${invoice.id}</title>
+          <title>Fatura ${escapeHtml(invoice.id)}</title>
           <style>
             * {
               margin: 0;
@@ -979,7 +990,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               
               <div class="invoice-meta">
                 <div class="invoice-number-section">
-                  <div class="invoice-number">FATURA #${invoice.id.slice(-8).toUpperCase()}</div>
+                  <div class="invoice-number">FATURA #${escapeHtml(invoice.id.slice(-8).toUpperCase())}</div>
                 </div>
                 <div class="invoice-dates">
                   <div class="date-item">
@@ -1000,28 +1011,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   <h3 class="section-title">Faturuar për:</h3>
                   <div class="info-item">
                     <span class="info-label">Klienti:</span>
-                    <span class="info-value">${client.name}</span>
+                    <span class="info-value">${escapeHtml(client.name)}</span>
                   </div>
                   <div class="info-item">
                     <span class="info-label">Email:</span>
-                    <span class="info-value">${client.email}</span>
+                    <span class="info-value">${escapeHtml(client.email)}</span>
                   </div>
                   ${client.phone ? `
                     <div class="info-item">
                       <span class="info-label">Telefoni:</span>
-                      <span class="info-value">${client.phone}</span>
+                      <span class="info-value">${escapeHtml(client.phone)}</span>
                     </div>
                   ` : ''}
                   ${client.address ? `
                     <div class="info-item">
                       <span class="info-label">Adresa:</span>
-                      <span class="info-value">${client.address}</span>
+                      <span class="info-value">${escapeHtml(client.address)}</span>
                     </div>
                   ` : ''}
                   ${client.taxId ? `
                     <div class="info-item">
                       <span class="info-label">Numri Fiskal:</span>
-                      <span class="info-value">${client.taxId}</span>
+                      <span class="info-value">${escapeHtml(client.taxId)}</span>
                     </div>
                   ` : ''}
                 </div>
@@ -1048,10 +1059,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 <div class="service-content">
                   <div class="service-item">
                     <div>
-                      <div class="service-name">${service.name}</div>
-                      <div class="service-description">${service.description || 'Shërbim profesional teknologjik'}</div>
+                      <div class="service-name">${escapeHtml(service.name)}</div>
+                      <div class="service-description">${escapeHtml(service.description) || 'Shërbim profesional teknologjik'}</div>
                     </div>
-                    <div class="amount">${invoice.amount}€</div>
+                    <div class="amount">${escapeHtml(String(invoice.amount))}€</div>
                   </div>
                 </div>
               </div>
