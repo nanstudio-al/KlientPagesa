@@ -56,7 +56,7 @@ async function seedAdminUser() {
           log('The application cannot create an admin user without this password');
           throw new Error('Missing ADMIN_PASSWORD environment variable in production');
         } else {
-          // Auto-generate password in development
+          // Use default password in development  
           const generatedPassword = 'admin123';
           log(`No admin user found. Creating admin user with username: ${adminUsername} and password: ${generatedPassword}`);
           

@@ -5,13 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ServiceCard } from "@/components/ServiceCard";
 import { ServiceForm } from "@/components/ServiceForm";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import type { InsertService } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
 export default function ServicesPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingService, setEditingService] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const { toast } = useToast();
 
   const { data: services = [], isLoading } = useQuery({
@@ -25,9 +28,25 @@ export default function ServicesPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/services'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       toast({ title: "Shërbimi u krijua me sukses!" });
+      setIsFormOpen(false);
     },
     onError: () => {
       toast({ title: "Gabim në krijimin e shërbimt", variant: "destructive" });
+    }
+  });
+
+  const updateServiceMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: InsertService }) => 
+      apiRequest('PUT', `/api/services/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/services'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+      toast({ title: "Shërbimi u përditësua me sukses!" });
+      setIsFormOpen(false);
+      setEditingService(null);
+    },
+    onError: () => {
+      toast({ title: "Gabim në përditësimin e shërbimt", variant: "destructive" });
     }
   });
 
@@ -48,12 +67,42 @@ export default function ServicesPage() {
     (service.description && service.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
+  // Pagination logic
+  const totalPages = Math.ceil(filteredServices.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentServices = filteredServices.slice(startIndex, endIndex);
+
+  // Reset to page 1 when search changes
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
+
   const handleServiceSubmit = (data: InsertService) => {
-    createServiceMutation.mutate(data);
+    if (editingService) {
+      updateServiceMutation.mutate({ id: editingService.id, data });
+    } else {
+      createServiceMutation.mutate(data);
+    }
   };
 
   const handleEditService = (serviceId: string) => {
-    console.log('Edit service:', serviceId);
+    const service = services.find((s: any) => s.id === serviceId);
+    if (service) {
+      setEditingService(service);
+      setIsFormOpen(true);
+    }
+  };
+
+  const handleNewService = () => {
+    setEditingService(null);
+    setIsFormOpen(true);
+  };
+
+  const handleCloseForm = () => {
+    setIsFormOpen(false);
+    setEditingService(null);
   };
 
   const handleDeleteService = (serviceId: string) => {
@@ -79,7 +128,7 @@ export default function ServicesPage() {
             <h1 className="text-3xl font-bold">Shërbimet</h1>
             <p className="text-muted-foreground">Menaxho shërbimet që ofron kompania</p>
           </div>
-          <Button onClick={() => setIsFormOpen(true)} data-testid="button-new-service">
+          <Button onClick={handleNewService} data-testid="button-new-service">
             <Plus className="w-4 h-4 mr-2" />
             Shërbim i ri
           </Button>
@@ -92,7 +141,7 @@ export default function ServicesPage() {
           <Input
             placeholder="Kërko shërbime..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="pl-10"
             data-testid="input-search-services"
           />
@@ -100,7 +149,7 @@ export default function ServicesPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredServices.map((service) => (
+        {currentServices.map((service) => (
           <ServiceCard
             key={service.id}
             service={service}
@@ -110,13 +159,54 @@ export default function ServicesPage() {
         ))}
       </div>
 
-      {filteredServices.length === 0 && (
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 mt-8">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+            disabled={currentPage === 1}
+            data-testid="button-prev-page"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Mbrapa
+          </Button>
+          
+          <div className="flex gap-1">
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <Button
+                key={page}
+                variant={currentPage === page ? "default" : "outline"}
+                size="sm"
+                onClick={() => setCurrentPage(page)}
+                data-testid={`button-page-${page}`}
+              >
+                {page}
+              </Button>
+            ))}
+          </div>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+            disabled={currentPage === totalPages}
+            data-testid="button-next-page"
+          >
+            Para
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+      )}
+
+      {currentServices.length === 0 && filteredServices.length === 0 && (
         <div className="text-center py-12">
           <p className="text-muted-foreground">Nuk u gjetën shërbime</p>
           {searchTerm && (
             <Button 
               variant="outline" 
-              onClick={() => setSearchTerm("")} 
+              onClick={() => handleSearchChange("")} 
               className="mt-4"
               data-testid="button-clear-search"
             >
@@ -128,8 +218,15 @@ export default function ServicesPage() {
 
       <ServiceForm 
         isOpen={isFormOpen}
-        onOpenChange={setIsFormOpen}
+        onOpenChange={handleCloseForm}
         onSubmit={handleServiceSubmit}
+        initialData={editingService ? {
+          name: editingService.name,
+          description: editingService.description || "",
+          price: editingService.price.toString(),
+          billingPeriod: editingService.billingPeriod
+        } : undefined}
+        title={editingService ? "Përditëso shërbimin" : "Shërbim i ri"}
       />
     </div>
   );
