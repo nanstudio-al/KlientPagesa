@@ -13,6 +13,7 @@ import ClientsPage from "@/pages/ClientsPage";
 import ServicesPage from "@/pages/ServicesPage";
 import InvoicesPage from "@/pages/InvoicesPage";
 import ReportsPage from "@/pages/ReportsPage";
+import UserManagementPage from "@/pages/UserManagementPage";
 import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/not-found";
 
@@ -24,6 +25,7 @@ function AuthenticatedApp() {
       <Route path="/services" component={ServicesPage} />
       <Route path="/invoices" component={InvoicesPage} />
       <Route path="/reports" component={ReportsPage} />
+      <Route path="/users" component={UserManagementPage} />
       <Route component={NotFound} />
     </Switch>
   );

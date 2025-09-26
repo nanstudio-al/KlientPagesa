@@ -14,8 +14,10 @@ import {
   Users, 
   Server, 
   FileText, 
-  BarChart3
+  BarChart3,
+  Settings
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 const menuItems = [
   {
@@ -47,6 +49,8 @@ const menuItems = [
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   return (
     <Sidebar data-testid="sidebar-main">
@@ -70,6 +74,18 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 );
               })}
+              
+              {/* Admin-only User Management */}
+              {isAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/users"}>
+                    <Link href="/users" data-testid="link-përdoruesit">
+                      <Settings />
+                      <span>Përdoruesit</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
