@@ -43,7 +43,7 @@ export const roleEnum = pgEnum("role", ["admin", "user"]);
 // Invoices table
 export const invoices = pgTable("invoices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  invoiceNumber: integer("invoice_number"),
+  invoiceNumber: integer("invoice_number").unique(),
   clientId: varchar("client_id").notNull().references(() => clients.id),
   serviceId: varchar("service_id").notNull().references(() => services.id),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),

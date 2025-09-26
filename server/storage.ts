@@ -292,9 +292,18 @@ export class MemStorage implements IStorage {
 
   async createInvoice(insertInvoice: InsertInvoice): Promise<Invoice> {
     const id = randomUUID();
+    
+    // Generate next sequential invoice number
+    const existingNumbers = Array.from(this.invoices.values())
+      .map(inv => inv.invoiceNumber)
+      .filter(num => num !== null && num !== undefined) as number[];
+    const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
+    const invoiceNumber = maxNumber + 1;
+    
     const invoice: Invoice = {
       ...insertInvoice,
       id,
+      invoiceNumber,
       issueDate: new Date(),
       status: insertInvoice.status || 'pending',
       paidDate: insertInvoice.paidDate || null
@@ -499,7 +508,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInvoice(invoice: InsertInvoice): Promise<Invoice> {
-    const [newInvoice] = await db.insert(invoices).values(invoice).returning();
+    // Generate next sequential invoice number
+    const existingInvoices = await db.select({ invoiceNumber: invoices.invoiceNumber }).from(invoices);
+    const existingNumbers = existingInvoices
+      .map(inv => inv.invoiceNumber)
+      .filter(num => num !== null && num !== undefined) as number[];
+    const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
+    const invoiceNumber = maxNumber + 1;
+    
+    const invoiceWithNumber = {
+      ...invoice,
+      invoiceNumber
+    };
+    
+    const [newInvoice] = await db.insert(invoices).values(invoiceWithNumber).returning();
     return newInvoice;
   }
 
