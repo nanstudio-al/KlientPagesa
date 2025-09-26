@@ -39,18 +39,8 @@ export async function generateModernInvoicePDF(invoice: InvoiceWithServices, cli
   const rightMargin = pageWidth - 40;
   const usableWidth = rightMargin - leftMargin;
 
-  // MODERN HEADER with gradient effect
+  // MODERN HEADER without background
   const headerHeight = 140;
-  
-  // Primary gradient background
-  doc.rect(0, 0, pageWidth, headerHeight)
-     .fill(colors.primary);
-  
-  // Overlay gradient effect
-  doc.rect(0, 0, pageWidth, headerHeight * 0.6)
-     .fillOpacity(0.2)
-     .fill('#ffffff')
-     .fillOpacity(1);
 
   // Company Logo and Brand
   try {
@@ -60,44 +50,41 @@ export async function generateModernInvoicePDF(invoice: InvoiceWithServices, cli
     // Modern fallback text logo
     doc.font('Helvetica-Bold')
        .fontSize(22)
-       .fillColor('#ffffff')
+       .fillColor(colors.dark)
        .text('NaN Studio', leftMargin, 35);
        
     doc.font('Helvetica')
        .fontSize(11)
-       .fillColor('#ffffff')
-       .fillOpacity(0.9)
-       .text('Professional Technology Services', leftMargin, 62)
-       .fillOpacity(1);
+       .fillColor(colors.medium)
+       .text('Professional Technology Services', leftMargin, 62);
   }
 
   // Modern Invoice Title - Right side of header
   const invoiceNumber = String(invoice.invoiceNumber || 1).padStart(3, '0');
   doc.font('Helvetica-Bold')
      .fontSize(28)
-     .fillColor('#ffffff')
+     .fillColor(colors.dark)
      .text('FATURË', rightMargin - 130, 25, { align: 'right', width: 130 });
      
   doc.font('Helvetica-Bold')
      .fontSize(16)
-     .fillColor('#ffffff')
-     .fillOpacity(0.9)
-     .text(`#${invoiceNumber}`, rightMargin - 130, 55, { align: 'right', width: 130 })
-     .fillOpacity(1);
+     .fillColor(colors.primary)
+     .text(`#${invoiceNumber}`, rightMargin - 130, 55, { align: 'right', width: 130 });
 
   // Date information in header
   doc.font('Helvetica')
      .fontSize(10)
-     .fillColor('#ffffff')
-     .fillOpacity(0.8)
+     .fillColor(colors.light)
      .text('Lëshuar:', rightMargin - 130, 80, { align: 'right', width: 60 })
      .font('Helvetica-Bold')
+     .fillColor(colors.medium)
      .text(new Date(invoice.issueDate).toLocaleDateString('sq-AL'), rightMargin - 65, 80, { align: 'right', width: 65 })
      .font('Helvetica')
+     .fillColor(colors.light)
      .text('Skadon:', rightMargin - 130, 95, { align: 'right', width: 60 })
      .font('Helvetica-Bold')
-     .text(new Date(invoice.dueDate).toLocaleDateString('sq-AL'), rightMargin - 65, 95, { align: 'right', width: 65 })
-     .fillOpacity(1);
+     .fillColor(colors.medium)
+     .text(new Date(invoice.dueDate).toLocaleDateString('sq-AL'), rightMargin - 65, 95, { align: 'right', width: 65 });
 
   let currentY = headerHeight + 30;
 
@@ -262,46 +249,32 @@ export async function generateModernInvoicePDF(invoice: InvoiceWithServices, cli
     rowIndex++;
   }
 
-  // TOTAL SECTION - Modern highlighting
+  // TOTAL SECTION - Same style as service rows
   currentY += 15;
-  const totalSectionHeight = 50;
+  const totalSectionHeight = 45;
   
   doc.rect(leftMargin, currentY, usableWidth, totalSectionHeight)
-     .fill(colors.primary)
-     .fillOpacity(0.1)
-     .fill(colors.background)
-     .fillOpacity(1);
+     .fillAndStroke(colors.background, '#e2e8f0')
+     .lineWidth(0.5);
 
   doc.font('Helvetica-Bold')
-     .fontSize(18)
+     .fontSize(11)
      .fillColor(colors.dark)
-     .text('TOTALI PËRFUNDIMTAR:', leftMargin + 280, currentY + 15);
+     .text('TOTALI PËRFUNDIMTAR:', leftMargin + 15, currentY + 16);
 
   doc.font('Helvetica-Bold')
-     .fontSize(22)
+     .fontSize(11)
      .fillColor(colors.primary)
-     .text(`€${invoice.totalAmount}`, leftMargin + 450, currentY + 12);
+     .text(`€${invoice.totalAmount}`, leftMargin + 450, currentY + 16);
 
-  // MODERN FOOTER
-  const footerY = pageHeight - 80;
+  // SIMPLE FOOTER
+  const footerY = pageHeight - 30;
   
-  doc.rect(0, footerY, pageWidth, 80)
-     .fill(colors.background);
-
   doc.font('Helvetica')
-     .fontSize(10)
+     .fontSize(8)
      .fillColor(colors.light)
-     .text('Ky dokument është gjeneruar automatikisht nga sistemi i menaxhimit të klientëve', 
-           leftMargin, footerY + 15, { width: usableWidth, align: 'center' });
-
-  doc.text('Faleminderit që zgjodhët shërbimet tona profesionale', 
-           leftMargin, footerY + 30, { width: usableWidth, align: 'center' });
-
-  doc.font('Helvetica-Bold')
-     .fontSize(12)
-     .fillColor(colors.primary)
      .text('NaN Studio - Professional Technology Services', 
-           leftMargin, footerY + 50, { width: usableWidth, align: 'center' });
+           leftMargin, footerY, { width: usableWidth, align: 'center' });
 
   // Finalize PDF
   doc.end();
