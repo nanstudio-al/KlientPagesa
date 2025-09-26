@@ -12,7 +12,6 @@ const pgSession = connectPgSimple(session);
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Trust proxy for correct IP handling behind reverse proxy/CDN
-  app.set('trust proxy', 1);
 
   // Security hardening - add security headers with environment-aware CSP
   const isDevelopment = process.env.NODE_ENV === 'development';
@@ -143,9 +142,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       secure: !isDevelopment, // HTTPS only in production
       httpOnly: true, // Prevent XSS
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      sameSite: 'lax' // CSRF protection
+      sameSite: 'lax', // CSRF protection
+      // Don't set domain explicitly to allow cookies to work on custom domains
+      // The browser will set it to the current domain automatically
     },
-    name: 'sessionId'
+    name: 'sessionId',
+    // Trust proxy for custom domain support
+    proxy: !isDevelopment
   }));
 
   // Custom authentication middleware

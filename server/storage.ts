@@ -462,7 +462,12 @@ export class DatabaseStorage implements IStorage {
 
   // Client-Service relationships
   async getClientServices(clientId: string): Promise<ClientService[]> {
-    return await db.select().from(clientServices).where(eq(clientServices.clientId, clientId));
+    return await db.select().from(clientServices).where(
+      and(
+        eq(clientServices.clientId, clientId),
+        eq(clientServices.isActive, 1)
+      )
+    );
   }
 
   async assignServiceToClient(assignment: InsertClientService): Promise<ClientService> {
