@@ -1,4 +1,5 @@
 import { useForm } from "react-hook-form";
+import { useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,31 @@ export function ClientForm({ isOpen, onOpenChange, onSubmit, initialData, title 
       isCompany: initialData?.isCompany || false,
     },
   });
+
+  // Reset form when initialData changes (for editing existing clients)
+  useEffect(() => {
+    if (initialData) {
+      // Editing existing client
+      form.reset({
+        name: initialData.name || "",
+        email: initialData.email || "",
+        phone: initialData.phone || "",
+        address: initialData.address || "",
+        taxId: initialData.taxId || "",
+        isCompany: Boolean(initialData.isCompany), // Normalize to boolean
+      });
+    } else if (isOpen) {
+      // Creating new client - reset to blank form
+      form.reset({
+        name: "",
+        email: "",
+        phone: "",
+        address: "",
+        taxId: "",
+        isCompany: false,
+      });
+    }
+  }, [initialData, isOpen, form]);
 
   const handleSubmit = (data: ClientFormData) => {
     onSubmit({
