@@ -40,15 +40,11 @@ export const paymentStatusEnum = pgEnum("payment_status", ["paid", "pending", "o
 // User role enum
 export const roleEnum = pgEnum("role", ["admin", "user"]);
 
-// Invoices table - dual structure during migration (old + new fields)
+// Invoices table - multiple services support
 export const invoices = pgTable("invoices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   invoiceNumber: integer("invoice_number").unique(),
   clientId: varchar("client_id").notNull().references(() => clients.id),
-  // Legacy fields (preserved for backward compatibility during migration)
-  serviceId: varchar("service_id").notNull().references(() => services.id),
-  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
-  // New field for multiple services support
   totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
   issueDate: timestamp("issue_date").default(sql`now()`).notNull(),
   dueDate: timestamp("due_date").notNull(),
@@ -91,9 +87,6 @@ export const insertInvoiceSchema = createInsertSchema(invoices).omit({
   id: true,
   invoiceNumber: true,
   issueDate: true,
-  // Omit calculated/auto-populated fields during dual-write phase
-  serviceId: true, // Will be set to first service for backward compatibility
-  amount: true, // Will be set to totalAmount for backward compatibility  
   totalAmount: true, // calculated from services
 }).extend({
   dueDate: z.coerce.date(),

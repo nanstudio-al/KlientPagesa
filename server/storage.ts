@@ -682,10 +682,6 @@ export class DatabaseStorage implements IStorage {
           status: invoice.status || 'pending' as const,
           paidDate: invoice.paidDate,
           invoiceNumber,
-          // Legacy fields for backward compatibility
-          serviceId: invoice.services[0].serviceId, // First service for backward compatibility
-          amount: serviceLines[0].lineTotal, // First service amount for backward compatibility
-          // New field for multi-service support
           totalAmount: totalAmount.toFixed(2),
         };
         

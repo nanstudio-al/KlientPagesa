@@ -501,7 +501,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           const totalPending = invoices
             .filter(inv => inv.status === 'pending')
-            .reduce((sum, inv) => sum + parseFloat(inv.amount), 0);
+            .reduce((sum, inv) => sum + parseFloat(inv.totalAmount || inv.amount || '0'), 0);
           
           const overdueCount = invoices.filter(inv => {
             return new Date(inv.dueDate) < new Date() && inv.status !== 'paid';
@@ -1162,11 +1162,11 @@ ${servicesList}
                  invoiceDate.getFullYear() === currentYear &&
                  inv.status === 'paid';
         })
-        .reduce((sum, inv) => sum + parseFloat(inv.amount), 0);
+        .reduce((sum, inv) => sum + parseFloat(inv.totalAmount || inv.amount || '0'), 0);
       
       const pendingAmount = invoices
         .filter(inv => inv.status === 'pending')
-        .reduce((sum, inv) => sum + parseFloat(inv.amount), 0);
+        .reduce((sum, inv) => sum + parseFloat(inv.totalAmount || inv.amount || '0'), 0);
       
       const stats = {
         totalClients: clients.length,
@@ -1193,13 +1193,18 @@ ${servicesList}
       const enrichedInvoices = await Promise.all(
         recentInvoices.map(async (invoice) => {
           const client = await storage.getClient(invoice.clientId);
-          const service = await storage.getService(invoice.serviceId);
+          // Use new services structure, fallback to legacy for backward compatibility
+          const serviceName = invoice.services && invoice.services.length > 0 
+            ? (invoice.services.length === 1 
+                ? invoice.services[0].service.name
+                : `${invoice.services.length} shërbime`)
+            : 'Unknown';
           
           return {
             id: invoice.id,
             clientName: client?.name || 'Unknown',
-            serviceName: service?.name || 'Unknown',
-            amount: invoice.amount,
+            serviceName,
+            amount: invoice.totalAmount || invoice.amount || '0',
             dueDate: invoice.dueDate,
             status: invoice.status
           };
@@ -1219,13 +1224,18 @@ ${servicesList}
       const enrichedInvoices = await Promise.all(
         upcomingInvoices.map(async (invoice) => {
           const client = await storage.getClient(invoice.clientId);
-          const service = await storage.getService(invoice.serviceId);
+          // Use new services structure, fallback to legacy for backward compatibility
+          const serviceName = invoice.services && invoice.services.length > 0 
+            ? (invoice.services.length === 1 
+                ? invoice.services[0].service.name
+                : `${invoice.services.length} shërbime`)
+            : 'Unknown';
           
           return {
             id: invoice.id,
             clientName: client?.name || 'Unknown',
-            serviceName: service?.name || 'Unknown',
-            amount: invoice.amount,
+            serviceName,
+            amount: invoice.totalAmount || invoice.amount || '0',
             dueDate: invoice.dueDate
           };
         })
@@ -1255,7 +1265,7 @@ ${servicesList}
       
       const currentMonthRevenue = currentMonthInvoices
         .filter(invoice => invoice.status === 'paid')
-        .reduce((sum, invoice) => sum + parseFloat(invoice.amount as string), 0);
+        .reduce((sum, invoice) => sum + parseFloat(invoice.totalAmount || invoice.amount || '0'), 0);
       
       // Get previous month stats for comparison
       const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
@@ -1268,7 +1278,7 @@ ${servicesList}
       
       const prevMonthRevenue = prevMonthInvoices
         .filter(invoice => invoice.status === 'paid')
-        .reduce((sum, invoice) => sum + parseFloat(invoice.amount as string), 0);
+        .reduce((sum, invoice) => sum + parseFloat(invoice.totalAmount || invoice.amount || '0'), 0);
       
       const revenueGrowth = prevMonthRevenue > 0 ? 
         ((currentMonthRevenue - prevMonthRevenue) / prevMonthRevenue * 100).toFixed(1) : '0';
@@ -1276,7 +1286,7 @@ ${servicesList}
       // Calculate pending revenue as well
       const currentMonthPendingRevenue = currentMonthInvoices
         .filter(invoice => invoice.status === 'pending')
-        .reduce((sum, invoice) => sum + parseFloat(invoice.amount as string), 0);
+        .reduce((sum, invoice) => sum + parseFloat(invoice.totalAmount || invoice.amount || '0'), 0);
       
       res.json({
         currentMonthRevenue: Math.round(currentMonthRevenue),
@@ -1295,23 +1305,44 @@ ${servicesList}
       const allInvoices = await storage.getAllInvoices();
       const allServices = await storage.getAllServices();
       
-      // Group invoices by service and calculate revenue
+      // Group by service and calculate revenue (supporting multiple services per invoice)
       const serviceStats = new Map();
       
       for (const invoice of allInvoices) {
         if (invoice.status === 'paid') {
-          const serviceId = invoice.serviceId;
-          if (!serviceStats.has(serviceId)) {
-            serviceStats.set(serviceId, {
-              revenue: 0,
-              clients: new Set(),
-              invoiceCount: 0
-            });
+          // Handle new multiple services structure
+          if (invoice.services && invoice.services.length > 0) {
+            for (const invoiceService of invoice.services) {
+              const serviceId = invoiceService.serviceId;
+              if (!serviceStats.has(serviceId)) {
+                serviceStats.set(serviceId, {
+                  revenue: 0,
+                  clients: new Set(),
+                  invoiceCount: 0
+                });
+              }
+              const stats = serviceStats.get(serviceId);
+              stats.revenue += parseFloat(invoiceService.lineTotal);
+              stats.clients.add(invoice.clientId);
+              stats.invoiceCount++;
+            }
+          } else {
+            // Fallback to legacy structure for backward compatibility
+            const serviceId = invoice.serviceId;
+            if (serviceId) {
+              if (!serviceStats.has(serviceId)) {
+                serviceStats.set(serviceId, {
+                  revenue: 0,
+                  clients: new Set(),
+                  invoiceCount: 0
+                });
+              }
+              const stats = serviceStats.get(serviceId);
+              stats.revenue += parseFloat(invoice.amount as string || '0');
+              stats.clients.add(invoice.clientId);
+              stats.invoiceCount++;
+            }
           }
-          const stats = serviceStats.get(serviceId);
-          stats.revenue += parseFloat(invoice.amount as string);
-          stats.clients.add(invoice.clientId);
-          stats.invoiceCount++;
         }
       }
       
@@ -1347,7 +1378,7 @@ ${servicesList}
           const daysDue = Math.floor((Date.now() - new Date(invoice.dueDate).getTime()) / (1000 * 60 * 60 * 24));
           overduePayments.push({
             clientName: client.name,
-            amount: Math.round(parseFloat(invoice.amount as string)),
+            amount: Math.round(parseFloat(invoice.totalAmount || invoice.amount || '0')),
             daysDue,
             invoiceId: invoice.id
           });
