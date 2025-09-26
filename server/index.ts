@@ -52,7 +52,9 @@ async function seedAdminUser() {
       if (!adminPassword) {
         if (process.env.NODE_ENV === 'production') {
           log('ERROR: ADMIN_PASSWORD environment variable is required in production');
-          process.exit(1);
+          log('Please add ADMIN_PASSWORD to your deployment secrets and restart the application');
+          log('The application cannot create an admin user without this password');
+          throw new Error('Missing ADMIN_PASSWORD environment variable in production');
         } else {
           // Auto-generate password in development
           const generatedPassword = 'admin123';
@@ -91,9 +93,18 @@ async function seedAdminUser() {
       log(`Found ${adminUsers.length} active admin user(s)`);
     }
   } catch (error) {
-    log('Error seeding admin user: ' + (error instanceof Error ? error.message : String(error)));
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    log('Error seeding admin user: ' + errorMessage);
+    
     if (process.env.NODE_ENV === 'production') {
-      process.exit(1);
+      log('CRITICAL ERROR: Unable to seed admin user in production');
+      log('This prevents the application from having any admin access');
+      log('Please check your environment variables and database connectivity');
+      
+      // Re-throw the error to let the application handle it appropriately
+      throw error;
+    } else {
+      log('Admin user seeding failed in development - continuing with startup');
     }
   }
 }
