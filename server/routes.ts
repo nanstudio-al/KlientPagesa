@@ -898,10 +898,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         yPos = 420;
         
         // Service Details Section
-        doc.rect(leftMargin, yPos, usableWidth, 30).fill('#0ea5e9');
+        doc.rect(leftMargin, yPos, usableWidth, 30).fill('#ffffff').stroke('#e2e8f0');
         doc.font('Helvetica-Bold')
            .fontSize(16)
-           .fill('#ffffff')
+           .fill('#1e293b')
            .text('Detajet e Shërbimit', leftMargin + 20, yPos + 8);
         
         yPos += 30;
@@ -920,11 +920,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
            .fill('#64748b')
            .text(service.description || 'Shërbim profesional teknologjik', leftMargin + 20, yPos, { width: usableWidth - 120 });
         
-        // Amount (right side)
+        // Amount (right side) - separate number and Euro symbol for proper alignment
+        const amountText = invoice.amount.toString();
+        const amountX = rightMargin - 100;
+        const amountY = yPos - 20;
+        
         doc.font('Helvetica-Bold')
            .fontSize(24)
            .fill('#0ea5e9')
-           .text(`${invoice.amount}€`, rightMargin - 100, yPos - 20, { width: 80, align: 'right' });
+           .text(amountText, amountX, amountY, { width: 60, align: 'right' });
+           
+        doc.font('Helvetica-Bold')
+           .fontSize(24)
+           .fill('#0ea5e9')
+           .text('€', amountX + 65, amountY);
         
         yPos += 80;
         
