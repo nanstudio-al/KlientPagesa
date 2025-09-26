@@ -13,60 +13,77 @@ import ClientsPage from "@/pages/ClientsPage";
 import ServicesPage from "@/pages/ServicesPage";
 import InvoicesPage from "@/pages/InvoicesPage";
 import ReportsPage from "@/pages/ReportsPage";
-import LandingPage from "@/pages/LandingPage";
+import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/not-found";
 
-function Router() {
-  // From Replit Auth integration blueprint
-  const { isAuthenticated, isLoading } = useAuth();
-
+function AuthenticatedApp() {
   return (
     <Switch>
-      {isLoading || !isAuthenticated ? (
-        <Route path="/" component={LandingPage} />
-      ) : (
-        <>
-          <Route path="/" component={DashboardPage} />
-          <Route path="/clients" component={ClientsPage} />
-          <Route path="/services" component={ServicesPage} />
-          <Route path="/invoices" component={InvoicesPage} />
-          <Route path="/reports" component={ReportsPage} />
-        </>
-      )}
+      <Route path="/" component={DashboardPage} />
+      <Route path="/clients" component={ClientsPage} />
+      <Route path="/services" component={ServicesPage} />
+      <Route path="/invoices" component={InvoicesPage} />
+      <Route path="/reports" component={ReportsPage} />
       <Route component={NotFound} />
     </Switch>
   );
 }
 
-export default function App() {
+function AppContent() {
+  const { isAuthenticated, isLoading } = useAuth();
+  
   const style = {
     "--sidebar-width": "20rem",
     "--sidebar-width-icon": "4rem",
   };
 
+  if (isLoading) {
+    // Loading state
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Duke u ngarkuar...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    // Show login page for unauthenticated users
+    return <LoginPage />;
+  }
+
+  // Show full application with sidebar for authenticated users
+  return (
+    <SidebarProvider style={style as React.CSSProperties}>
+      <div className="flex h-screen w-full">
+        <AppSidebar />
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <header className="flex items-center justify-between p-4 border-b bg-background">
+            <div className="flex items-center gap-4">
+              <SidebarTrigger data-testid="button-sidebar-toggle" />
+              <h2 className="font-semibold text-lg">Menaxhimi i Klientëve</h2>
+            </div>
+            <ThemeToggle />
+          </header>
+          <main className="flex-1 overflow-auto">
+            <div className="container max-w-7xl mx-auto p-6">
+              <AuthenticatedApp />
+            </div>
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
+  );
+}
+
+export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <ThemeProvider>
-          <SidebarProvider style={style as React.CSSProperties}>
-            <div className="flex h-screen w-full">
-              <AppSidebar />
-              <div className="flex flex-col flex-1 overflow-hidden">
-                <header className="flex items-center justify-between p-4 border-b bg-background">
-                  <div className="flex items-center gap-4">
-                    <SidebarTrigger data-testid="button-sidebar-toggle" />
-                    <h2 className="font-semibold text-lg">Menaxhimi i Klientëve</h2>
-                  </div>
-                  <ThemeToggle />
-                </header>
-                <main className="flex-1 overflow-auto">
-                  <div className="container max-w-7xl mx-auto p-6">
-                    <Router />
-                  </div>
-                </main>
-              </div>
-            </div>
-          </SidebarProvider>
+          <AppContent />
           <Toaster />
         </ThemeProvider>
       </TooltipProvider>
