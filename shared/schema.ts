@@ -37,6 +37,9 @@ export const clientServices = pgTable("client_services", {
 // Payment status enum
 export const paymentStatusEnum = pgEnum("payment_status", ["paid", "pending", "overdue"]);
 
+// User role enum
+export const roleEnum = pgEnum("role", ["admin", "user"]);
+
 // Invoices table
 export const invoices = pgTable("invoices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -83,20 +86,55 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
-// User storage table.
-// (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
+// User storage table - Extended for custom authentication
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  username: varchar("username").unique().notNull(),
+  passwordHash: varchar("password_hash").notNull(),
   email: varchar("email").unique(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
+  role: roleEnum("role").default("user").notNull(),
+  isActive: integer("is_active").default(1).notNull(), // 1 = active, 0 = inactive
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`now()`).notNull(),
 });
 
+// User schemas for authentication
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const loginSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+
+export const createUserSchema = insertUserSchema.omit({
+  passwordHash: true,
+}).extend({
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+
+export const updateUserSchema = z.object({
+  username: z.string().min(1).optional(),
+  email: z.string().email().optional(),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  role: z.enum(["admin", "user"]).optional(),
+  isActive: z.number().min(0).max(1).optional(),
+});
+
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type LoginCredentials = z.infer<typeof loginSchema>;
+export type CreateUser = z.infer<typeof createUserSchema>;
+export type UpdateUser = z.infer<typeof updateUserSchema>;
+export type UserRole = "admin" | "user";
 
 // Types
 export type Client = typeof clients.$inferSelect;
