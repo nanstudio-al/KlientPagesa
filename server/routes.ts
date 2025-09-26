@@ -3,8 +3,34 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertClientSchema, insertServiceSchema, insertInvoiceSchema } from "@shared/schema";
 import { z } from "zod";
+import { setupAuth, isAuthenticated } from "./replitAuth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Auth middleware - from Replit Auth integration
+  await setupAuth(app);
+
+  // Protected API routes - all routes under /api/* require authentication except auth flow routes
+  app.use('/api', (req, res, next) => {
+    // Whitelist auth flow routes that should be public
+    const publicRoutes = ['/api/login', '/api/callback', '/api/logout'];
+    if (publicRoutes.includes(req.path)) {
+      return next();
+    }
+    // All other /api/* routes require authentication
+    return isAuthenticated(req, res, next);
+  });
+
+  // Auth routes - from Replit Auth integration  
+  app.get('/api/auth/user', async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
   // Client routes
   app.get("/api/clients", async (req, res) => {
     try {
@@ -326,6 +352,129 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(enrichedInvoices);
     } catch (error) {
       res.status(500).json({ error: 'Failed to fetch upcoming payments' });
+    }
+  });
+
+  // Reports routes
+  app.get("/api/reports/monthly-stats", async (req, res) => {
+    try {
+      const allInvoices = await storage.getAllInvoices();
+      const allClients = await storage.getAllClients();
+      
+      // Get current month stats
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+      
+      const currentMonthInvoices = allInvoices.filter(invoice => {
+        const invoiceDate = new Date(invoice.issueDate);
+        return invoiceDate.getMonth() === currentMonth && invoiceDate.getFullYear() === currentYear;
+      });
+      
+      const currentMonthRevenue = currentMonthInvoices
+        .filter(invoice => invoice.status === 'paid')
+        .reduce((sum, invoice) => sum + parseFloat(invoice.amount as string), 0);
+      
+      // Get previous month stats for comparison
+      const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+      const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+      
+      const prevMonthInvoices = allInvoices.filter(invoice => {
+        const invoiceDate = new Date(invoice.issueDate);
+        return invoiceDate.getMonth() === prevMonth && invoiceDate.getFullYear() === prevYear;
+      });
+      
+      const prevMonthRevenue = prevMonthInvoices
+        .filter(invoice => invoice.status === 'paid')
+        .reduce((sum, invoice) => sum + parseFloat(invoice.amount as string), 0);
+      
+      const revenueGrowth = prevMonthRevenue > 0 ? 
+        ((currentMonthRevenue - prevMonthRevenue) / prevMonthRevenue * 100).toFixed(1) : '0';
+      
+      // Calculate pending revenue as well
+      const currentMonthPendingRevenue = currentMonthInvoices
+        .filter(invoice => invoice.status === 'pending')
+        .reduce((sum, invoice) => sum + parseFloat(invoice.amount as string), 0);
+      
+      res.json({
+        currentMonthRevenue: Math.round(currentMonthRevenue),
+        currentMonthPendingRevenue: Math.round(currentMonthPendingRevenue),
+        currentMonthInvoices: currentMonthInvoices.length,
+        totalClients: allClients.length,
+        revenueGrowth: parseFloat(revenueGrowth)
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch monthly stats' });
+    }
+  });
+
+  app.get("/api/reports/top-services", async (req, res) => {
+    try {
+      const allInvoices = await storage.getAllInvoices();
+      const allServices = await storage.getAllServices();
+      
+      // Group invoices by service and calculate revenue
+      const serviceStats = new Map();
+      
+      for (const invoice of allInvoices) {
+        if (invoice.status === 'paid') {
+          const serviceId = invoice.serviceId;
+          if (!serviceStats.has(serviceId)) {
+            serviceStats.set(serviceId, {
+              revenue: 0,
+              clients: new Set(),
+              invoiceCount: 0
+            });
+          }
+          const stats = serviceStats.get(serviceId);
+          stats.revenue += parseFloat(invoice.amount as string);
+          stats.clients.add(invoice.clientId);
+          stats.invoiceCount++;
+        }
+      }
+      
+      // Get service details and sort by revenue
+      const topServices = [];
+      for (const service of allServices) {
+        const stats = serviceStats.get(service.id) || { revenue: 0, clients: new Set(), invoiceCount: 0 };
+        topServices.push({
+          name: service.name,
+          revenue: Math.round(stats.revenue),
+          clients: stats.clients.size,
+          growth: '+0%' // Simplified for now
+        });
+      }
+      
+      topServices.sort((a, b) => b.revenue - a.revenue);
+      
+      res.json(topServices.slice(0, 5)); // Top 5 services
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch top services' });
+    }
+  });
+
+  app.get("/api/reports/overdue-payments", async (req, res) => {
+    try {
+      const overdueInvoices = await storage.getOverdueInvoices();
+      const allClients = await storage.getAllClients();
+      
+      const overduePayments = [];
+      for (const invoice of overdueInvoices) {
+        const client = allClients.find(c => c.id === invoice.clientId);
+        if (client) {
+          const daysDue = Math.floor((Date.now() - new Date(invoice.dueDate).getTime()) / (1000 * 60 * 60 * 24));
+          overduePayments.push({
+            clientName: client.name,
+            amount: Math.round(parseFloat(invoice.amount as string)),
+            daysDue,
+            invoiceId: invoice.id
+          });
+        }
+      }
+      
+      res.json(overduePayments);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch overdue payments' });
     }
   });
 

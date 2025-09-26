@@ -7,21 +7,32 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AppSidebar } from "@/components/AppSidebar";
+import { useAuth } from "@/hooks/useAuth";
 import DashboardPage from "@/pages/DashboardPage";
 import ClientsPage from "@/pages/ClientsPage";
 import ServicesPage from "@/pages/ServicesPage";
 import InvoicesPage from "@/pages/InvoicesPage";
 import ReportsPage from "@/pages/ReportsPage";
+import LandingPage from "@/pages/LandingPage";
 import NotFound from "@/pages/not-found";
 
 function Router() {
+  // From Replit Auth integration blueprint
+  const { isAuthenticated, isLoading } = useAuth();
+
   return (
     <Switch>
-      <Route path="/" component={DashboardPage} />
-      <Route path="/clients" component={ClientsPage} />
-      <Route path="/services" component={ServicesPage} />
-      <Route path="/invoices" component={InvoicesPage} />
-      <Route path="/reports" component={ReportsPage} />
+      {isLoading || !isAuthenticated ? (
+        <Route path="/" component={LandingPage} />
+      ) : (
+        <>
+          <Route path="/" component={DashboardPage} />
+          <Route path="/clients" component={ClientsPage} />
+          <Route path="/services" component={ServicesPage} />
+          <Route path="/invoices" component={InvoicesPage} />
+          <Route path="/reports" component={ReportsPage} />
+        </>
+      )}
       <Route component={NotFound} />
     </Switch>
   );

@@ -35,6 +35,9 @@ export default function InvoicesPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/recent-invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/reports/monthly-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/reports/top-services'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/reports/overdue-payments'] });
       toast({ title: "Fatura u krijua me sukses!" });
     },
     onError: () => {
@@ -51,6 +54,9 @@ export default function InvoicesPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/recent-invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/reports/monthly-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/reports/top-services'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/reports/overdue-payments'] });
       toast({ title: "Fatura u shënua si e paguar!" });
     },
     onError: () => {
