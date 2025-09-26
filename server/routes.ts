@@ -4,8 +4,120 @@ import { storage } from "./storage";
 import { insertClientSchema, insertServiceSchema, insertInvoiceSchema } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Trust proxy for correct IP handling behind reverse proxy/CDN
+  app.set('trust proxy', 1);
+
+  // Security hardening - add security headers with environment-aware CSP
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: isDevelopment 
+          ? ["'self'", "'unsafe-inline'", "fonts.googleapis.com"] // Allow inline styles and Google Fonts for Vite dev
+          : ["'self'", "fonts.googleapis.com"], 
+        scriptSrc: isDevelopment 
+          ? ["'self'", "'unsafe-inline'", "'unsafe-eval'"] // Allow inline scripts and eval for Vite dev
+          : ["'self'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: isDevelopment 
+          ? ["'self'", "wss:", "ws:"] // Allow WebSocket for Vite HMR
+          : ["'self'"],
+        fontSrc: ["'self'", "fonts.gstatic.com"], // For Google Fonts
+        frameAncestors: ["'none'"], // Prevent clickjacking
+      },
+    },
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    hsts: !isDevelopment ? {
+      maxAge: 31536000, // 1 year
+      includeSubDomains: true,
+      preload: true
+    } : false, // Only in production
+  }));
+
+  // Rate limiting - protect API endpoints from abuse
+  const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: {
+      error: "Too many requests from this IP, please try again later."
+    },
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+    // Skip rate limiting for auth callback endpoints (they may have different patterns)
+    skip: (req) => {
+      const authCallbackPaths = ['/api/login', '/api/callback', '/api/logout'];
+      try {
+        const url = new URL(req.originalUrl, `${req.protocol}://${req.get('host')}`);
+        return authCallbackPaths.some(path => url.pathname.startsWith(path));
+      } catch {
+        // Fallback to original logic if URL parsing fails
+        return authCallbackPaths.includes(req.originalUrl);
+      }
+    },
+  });
+
+  // Apply rate limiting to all /api/* routes
+  app.use('/api', apiLimiter);
+
+  // CSRF protection for state-changing requests using Origin/Referer checks
+  app.use('/api', (req, res, next) => {
+    const stateChangingMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
+    
+    if (stateChangingMethods.includes(req.method)) {
+      const origin = req.get('Origin');
+      const referer = req.get('Referer');
+      
+      // Build allowed origins list
+      const allowedOrigins = [];
+      
+      // Always allow same-origin (current request origin)
+      const currentOrigin = `${req.protocol}://${req.get('host')}`;
+      allowedOrigins.push(currentOrigin);
+      
+      // Add REPLIT_DOMAINS if available
+      if (process.env.REPLIT_DOMAINS) {
+        process.env.REPLIT_DOMAINS.split(',').forEach(domain => {
+          allowedOrigins.push(`https://${domain.trim()}`);
+        });
+      }
+      
+      // For development, also allow common dev origins
+      if (isDevelopment) {
+        allowedOrigins.push('http://localhost:5000', 'https://localhost:5000');
+      }
+      
+      // Check if Origin header matches allowed origins
+      if (origin && !allowedOrigins.includes(origin)) {
+        return res.status(403).json({ error: 'Forbidden: Invalid origin' });
+      }
+      
+      // If no Origin header, check Referer as fallback
+      if (!origin && referer) {
+        try {
+          const refererUrl = new URL(referer);
+          const refererOrigin = `${refererUrl.protocol}//${refererUrl.host}`;
+          if (!allowedOrigins.includes(refererOrigin)) {
+            return res.status(403).json({ error: 'Forbidden: Invalid referer' });
+          }
+        } catch {
+          return res.status(403).json({ error: 'Forbidden: Invalid referer format' });
+        }
+      }
+      
+      // If neither Origin nor Referer is present for state-changing requests, reject
+      if (!origin && !referer) {
+        return res.status(403).json({ error: 'Forbidden: Missing origin/referer headers' });
+      }
+    }
+    
+    next();
+  });
+
   // Auth middleware - from Replit Auth integration
   await setupAuth(app);
 
@@ -216,9 +328,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/invoices", async (req, res) => {
     try {
-      console.log("Invoice creation request body:", JSON.stringify(req.body, null, 2));
+      // Only log in development - avoid sensitive data in production logs
+      if (isDevelopment) {
+        console.log("Invoice creation request body:", JSON.stringify(req.body, null, 2));
+      }
       const validatedData = insertInvoiceSchema.parse(req.body);
-      console.log("Validated invoice data:", JSON.stringify(validatedData, null, 2));
+      if (isDevelopment) {
+        console.log("Validated invoice data:", JSON.stringify(validatedData, null, 2));
+      }
       const invoice = await storage.createInvoice(validatedData);
       res.status(201).json(invoice);
     } catch (error) {
