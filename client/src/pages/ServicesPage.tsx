@@ -1,57 +1,55 @@
 import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ServiceCard } from "@/components/ServiceCard";
 import { ServiceForm } from "@/components/ServiceForm";
 import { Plus, Search } from "lucide-react";
+import type { InsertService } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ServicesPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const { toast } = useToast();
 
-  //todo: remove mock functionality
-  const mockServices = [
-    {
-      id: '1',
-      name: 'Hostim Web',
-      description: 'Hostim i plotë për faqe interneti me SSL dhe backup automatik',
-      price: '200.00',
-      billingPeriod: 'yearly',
-      createdAt: new Date(),
-    },
-    {
-      id: '2',
-      name: 'Email Business',
-      description: 'Shërbim email profesional me domain personalizado',
-      price: '50.00',
-      billingPeriod: 'monthly',
-      createdAt: new Date(),
-    },
-    {
-      id: '3',
-      name: 'Support Teknik',
-      description: 'Support teknik 24/7 për të gjitha shërbimet',
-      price: '150.00',
-      billingPeriod: 'monthly',
-      createdAt: new Date(),
-    },
-    {
-      id: '4',
-      name: 'Domain Registration',
-      description: 'Regjistrim dhe menaxhim domenesh',
-      price: '25.00',
-      billingPeriod: 'yearly',
-      createdAt: new Date(),
-    },
-  ];
+  const { data: services = [], isLoading } = useQuery({
+    queryKey: ['/api/services'],
+    enabled: true
+  });
 
-  const filteredServices = mockServices.filter(service =>
+  const createServiceMutation = useMutation({
+    mutationFn: (data: InsertService) => apiRequest('POST', '/api/services', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/services'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+      toast({ title: "Shërbimi u krijua me sukses!" });
+    },
+    onError: () => {
+      toast({ title: "Gabim në krijimin e shërbimt", variant: "destructive" });
+    }
+  });
+
+  const deleteServiceMutation = useMutation({
+    mutationFn: (serviceId: string) => apiRequest('DELETE', `/api/services/${serviceId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/services'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+      toast({ title: "Shërbimi u fshi me sukses!" });
+    },
+    onError: () => {
+      toast({ title: "Gabim në fshirjen e shërbimt", variant: "destructive" });
+    }
+  });
+
+  const filteredServices = (services as any[]).filter((service: any) =>
     service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (service.description && service.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const handleServiceSubmit = (data: any) => {
-    console.log('Service created:', data);
+  const handleServiceSubmit = (data: InsertService) => {
+    createServiceMutation.mutate(data);
   };
 
   const handleEditService = (serviceId: string) => {
@@ -59,8 +57,19 @@ export default function ServicesPage() {
   };
 
   const handleDeleteService = (serviceId: string) => {
-    console.log('Delete service:', serviceId);
+    deleteServiceMutation.mutate(serviceId);
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-muted-foreground">Duke ngarkuar shërbimet...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div data-testid="page-services">

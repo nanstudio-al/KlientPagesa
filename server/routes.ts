@@ -190,11 +190,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/invoices", async (req, res) => {
     try {
+      console.log("Invoice creation request body:", JSON.stringify(req.body, null, 2));
       const validatedData = insertInvoiceSchema.parse(req.body);
+      console.log("Validated invoice data:", JSON.stringify(validatedData, null, 2));
       const invoice = await storage.createInvoice(validatedData);
       res.status(201).json(invoice);
     } catch (error) {
+      console.error("Invoice creation error:", error);
       if (error instanceof z.ZodError) {
+        console.log("Validation errors:", JSON.stringify(error.errors, null, 2));
         res.status(400).json({ error: 'Validation failed', details: error.errors });
       } else {
         res.status(500).json({ error: 'Failed to create invoice' });

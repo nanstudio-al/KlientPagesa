@@ -7,9 +7,19 @@ import {
   type InsertInvoice,
   type ClientService,
   type InsertClientService,
-  type PaymentStatus
+  type PaymentStatus,
+  clients,
+  services,
+  clientServices,
+  invoices
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-http";
+import { eq, and, lt, gte, lte, ne } from "drizzle-orm";
+
+const sql = neon(process.env.DATABASE_URL!);
+const db = drizzle(sql);
 
 export interface IStorage {
   // Client operations
@@ -217,4 +227,131 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export class DatabaseStorage implements IStorage {
+  // Client operations
+  async getClient(id: string): Promise<Client | undefined> {
+    const [client] = await db.select().from(clients).where(eq(clients.id, id));
+    return client;
+  }
+
+  async getAllClients(): Promise<Client[]> {
+    return await db.select().from(clients);
+  }
+
+  async createClient(client: InsertClient): Promise<Client> {
+    const [newClient] = await db.insert(clients).values(client).returning();
+    return newClient;
+  }
+
+  async updateClient(id: string, client: Partial<InsertClient>): Promise<Client | undefined> {
+    const [updatedClient] = await db.update(clients)
+      .set(client)
+      .where(eq(clients.id, id))
+      .returning();
+    return updatedClient;
+  }
+
+  async deleteClient(id: string): Promise<boolean> {
+    const result = await db.delete(clients).where(eq(clients.id, id));
+    return result.rowCount > 0;
+  }
+
+  // Service operations
+  async getService(id: string): Promise<Service | undefined> {
+    const [service] = await db.select().from(services).where(eq(services.id, id));
+    return service;
+  }
+
+  async getAllServices(): Promise<Service[]> {
+    return await db.select().from(services);
+  }
+
+  async createService(service: InsertService): Promise<Service> {
+    const [newService] = await db.insert(services).values(service).returning();
+    return newService;
+  }
+
+  async updateService(id: string, service: Partial<InsertService>): Promise<Service | undefined> {
+    const [updatedService] = await db.update(services)
+      .set(service)
+      .where(eq(services.id, id))
+      .returning();
+    return updatedService;
+  }
+
+  async deleteService(id: string): Promise<boolean> {
+    const result = await db.delete(services).where(eq(services.id, id));
+    return result.rowCount > 0;
+  }
+
+  // Client-Service relationships
+  async getClientServices(clientId: string): Promise<ClientService[]> {
+    return await db.select().from(clientServices).where(eq(clientServices.clientId, clientId));
+  }
+
+  async assignServiceToClient(assignment: InsertClientService): Promise<ClientService> {
+    const [newAssignment] = await db.insert(clientServices).values(assignment).returning();
+    return newAssignment;
+  }
+
+  async removeServiceFromClient(clientId: string, serviceId: string): Promise<boolean> {
+    const result = await db.delete(clientServices)
+      .where(and(
+        eq(clientServices.clientId, clientId),
+        eq(clientServices.serviceId, serviceId)
+      ));
+    return result.rowCount > 0;
+  }
+
+  // Invoice operations
+  async getInvoice(id: string): Promise<Invoice | undefined> {
+    const [invoice] = await db.select().from(invoices).where(eq(invoices.id, id));
+    return invoice;
+  }
+
+  async getAllInvoices(): Promise<Invoice[]> {
+    return await db.select().from(invoices);
+  }
+
+  async getInvoicesByClient(clientId: string): Promise<Invoice[]> {
+    return await db.select().from(invoices).where(eq(invoices.clientId, clientId));
+  }
+
+  async createInvoice(invoice: InsertInvoice): Promise<Invoice> {
+    const [newInvoice] = await db.insert(invoices).values(invoice).returning();
+    return newInvoice;
+  }
+
+  async updateInvoiceStatus(id: string, status: PaymentStatus, paidDate?: Date): Promise<Invoice | undefined> {
+    const [updatedInvoice] = await db.update(invoices)
+      .set({
+        status,
+        paidDate: status === 'paid' ? (paidDate || new Date()) : null
+      })
+      .where(eq(invoices.id, id))
+      .returning();
+    return updatedInvoice;
+  }
+
+  async getOverdueInvoices(): Promise<Invoice[]> {
+    const now = new Date();
+    return await db.select().from(invoices)
+      .where(and(
+        lt(invoices.dueDate, now),
+        ne(invoices.status, 'paid')
+      ));
+  }
+
+  async getUpcomingInvoices(days: number): Promise<Invoice[]> {
+    const now = new Date();
+    const futureDate = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+    return await db.select().from(invoices)
+      .where(and(
+        gte(invoices.dueDate, now),
+        lte(invoices.dueDate, futureDate),
+        ne(invoices.status, 'paid')
+      ));
+  }
+}
+
+export const storage = new DatabaseStorage();

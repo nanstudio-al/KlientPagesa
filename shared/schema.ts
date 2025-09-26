@@ -67,6 +67,8 @@ export const insertClientServiceSchema = createInsertSchema(clientServices).omit
 export const insertInvoiceSchema = createInsertSchema(invoices).omit({
   id: true,
   issueDate: true,
+}).extend({
+  dueDate: z.coerce.date(),
 });
 
 // Types

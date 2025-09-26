@@ -1,9 +1,12 @@
 import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InvoiceCard } from "@/components/InvoiceCard";
+import { InvoiceForm } from "@/components/InvoiceForm";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Plus, Search, Filter } from "lucide-react";
+import { Plus, Search, Filter, AlertCircle } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -11,60 +14,67 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useToast } from "@/hooks/use-toast";
+import type { InsertInvoice } from "@shared/schema";
 
 export default function InvoicesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [isInvoiceFormOpen, setIsInvoiceFormOpen] = useState(false);
+  const { toast } = useToast();
 
-  //todo: remove mock functionality
-  const mockInvoices = [
-    {
-      id: '1',
-      clientId: '1',
-      serviceId: '1',
-      amount: '200.00',
-      issueDate: new Date('2024-05-01'),
-      dueDate: new Date('2024-06-15'),
-      status: 'pending' as const,
-      paidDate: null,
-      clientName: 'Alfa Shpk',
-      serviceName: 'Hostim Web',
-    },
-    {
-      id: '2',
-      clientId: '2',
-      serviceId: '2',
-      amount: '50.00',
-      issueDate: new Date('2024-05-15'),
-      dueDate: new Date('2024-05-30'),
-      status: 'overdue' as const,
-      paidDate: null,
-      clientName: 'Beta Solutions',
-      serviceName: 'Email Business',
-    },
-    {
-      id: '3',
-      clientId: '3',
-      serviceId: '1',
-      amount: '200.00',
-      issueDate: new Date('2024-04-01'),
-      dueDate: new Date('2024-05-01'),
-      status: 'paid' as const,
-      paidDate: new Date('2024-04-28'),
-      clientName: 'Tech Solutions Ltd',
-      serviceName: 'Hostim Web',
-    },
-  ];
+  const { data: invoices = [], isLoading, error } = useQuery({
+    queryKey: ['/api/invoices'],
+    enabled: true
+  });
 
-  const filteredInvoices = mockInvoices.filter(invoice => {
+  const createInvoiceMutation = useMutation({
+    mutationFn: (data: InsertInvoice) => apiRequest('POST', '/api/invoices', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/recent-invoices'] });
+      toast({ title: "Fatura u krijua me sukses!" });
+    },
+    onError: () => {
+      toast({ title: "Gabim në krijimin e faturës", variant: "destructive" });
+    }
+  });
+
+  const markPaidMutation = useMutation({
+    mutationFn: (invoiceId: string) => apiRequest('PATCH', `/api/invoices/${invoiceId}/status`, {
+      status: 'paid',
+      paidDate: new Date().toISOString()
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/recent-invoices'] });
+      toast({ title: "Fatura u shënua si e paguar!" });
+    },
+    onError: () => {
+      toast({ title: "Gabim në përditisimin e faturës", variant: "destructive" });
+    }
+  });
+
+  const filteredInvoices = (invoices as any[]).filter((invoice: any) => {
     const matchesSearch = invoice.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          invoice.serviceName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || invoice.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
+  const handleCreateInvoice = () => {
+    setIsInvoiceFormOpen(true);
+  };
+
+  const handleInvoiceSubmit = (data: InsertInvoice) => {
+    createInvoiceMutation.mutate(data);
+  };
+
   const handleMarkPaid = (invoiceId: string) => {
-    console.log('Mark invoice as paid:', invoiceId);
+    markPaidMutation.mutate(invoiceId);
   };
 
   const handleSendEmail = (invoiceId: string) => {
@@ -76,9 +86,20 @@ export default function InvoicesPage() {
   };
 
   const getStatusCount = (status: string) => {
-    if (status === "all") return mockInvoices.length;
-    return mockInvoices.filter(inv => inv.status === status).length;
+    if (status === "all") return (invoices as any[]).length;
+    return (invoices as any[]).filter((inv: any) => inv.status === status).length;
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-muted-foreground">Duke ngarkuar faturat...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div data-testid="page-invoices">
@@ -88,7 +109,7 @@ export default function InvoicesPage() {
             <h1 className="text-3xl font-bold">Faturat</h1>
             <p className="text-muted-foreground">Menaxho faturat dhe pagesat</p>
           </div>
-          <Button data-testid="button-new-invoice">
+          <Button onClick={handleCreateInvoice} data-testid="button-new-invoice">
             <Plus className="w-4 h-4 mr-2" />
             Faturë e re
           </Button>
@@ -127,6 +148,15 @@ export default function InvoicesPage() {
         </div>
       </div>
 
+      {error && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Gabim në ngarkimin e faturave. Provoni përsëri.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredInvoices.map((invoice) => (
           <InvoiceCard
@@ -157,6 +187,12 @@ export default function InvoicesPage() {
           )}
         </div>
       )}
+
+      <InvoiceForm 
+        isOpen={isInvoiceFormOpen}
+        onOpenChange={setIsInvoiceFormOpen}
+        onSubmit={handleInvoiceSubmit}
+      />
     </div>
   );
 }
