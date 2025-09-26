@@ -23,7 +23,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? ["'self'", "'unsafe-inline'", "fonts.googleapis.com"] // Allow inline styles and Google Fonts for Vite dev
           : ["'self'", "fonts.googleapis.com"], 
         scriptSrc: isDevelopment 
-          ? ["'self'", "'unsafe-inline'", "'unsafe-eval'"] // Allow inline scripts and eval for Vite dev
+          ? ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://replit.com"] // Allow inline scripts, eval and Replit dev banner
           : ["'self'"],
         imgSrc: ["'self'", "data:", "https:"],
         connectSrc: isDevelopment 
@@ -787,8 +787,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.setHeader('Content-Disposition', `attachment; filename="fatura-${invoice.id.slice(-8)}.pdf"`);
       res.send(pdfBuffer);
     } catch (error) {
-      console.error('Download invoice error:', error);
-      res.status(500).json({ error: 'Failed to generate invoice document' });
+      console.error('Download invoice error details:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : typeof error
+      });
+      res.status(500).json({ 
+        error: 'Failed to generate invoice document',
+        details: process.env.NODE_ENV === 'development' && error instanceof Error ? error.message : undefined
+      });
     }
   });
 
@@ -841,10 +848,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const msg = {
           to: client.email,
-          from: 'noreply@example.com', // Should be configured with your verified domain
+          from: 'noreply@replit.app', // Using replit.app domain which is more likely to work
           subject: `Fatura #${invoice.id.slice(-8).toUpperCase()} - ${service.name}`,
           text: emailContent,
-          html: emailContent.replace(/\\n/g, '<br>')
+          html: emailContent.replace(/\n/g, '<br>')
         };
 
         await sgMail.send(msg);
@@ -856,10 +863,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         
       } catch (emailError) {
-        console.error('SendGrid error:', emailError);
+        console.error('SendGrid error details:', {
+          message: emailError instanceof Error ? emailError.message : String(emailError),
+          code: (emailError as any)?.code || 'no-code',
+          response: (emailError as any)?.response?.body || 'no-response-body',
+          stack: emailError instanceof Error ? emailError.stack : undefined
+        });
         res.status(500).json({ 
-          error: 'Failed to send email. Please check your SendGrid configuration.',
-          details: emailError instanceof Error ? emailError.message : 'Unknown error'
+          error: 'Failed to send email via SendGrid',
+          details: process.env.NODE_ENV === 'development' && emailError instanceof Error ? emailError.message : 'Check server logs for details'
         });
       }
     } catch (error) {
