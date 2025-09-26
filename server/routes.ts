@@ -567,9 +567,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/clients/:id", async (req, res) => {
     try {
+      // First check if client exists
+      const client = await storage.getClient(req.params.id);
+      if (!client) {
+        return res.status(404).json({ error: 'Client not found' });
+      }
+
       const success = await storage.deleteClient(req.params.id);
       if (!success) {
-        return res.status(404).json({ error: 'Client not found' });
+        return res.status(500).json({ 
+          error: 'Failed to delete client',
+          message: 'An error occurred while deleting the client and related data.'
+        });
       }
       res.status(204).send();
     } catch (error) {
@@ -632,9 +641,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/services/:id", async (req, res) => {
     try {
+      // First check if service exists
+      const service = await storage.getService(req.params.id);
+      if (!service) {
+        return res.status(404).json({ error: 'Service not found' });
+      }
+
       const success = await storage.deleteService(req.params.id);
       if (!success) {
-        return res.status(404).json({ error: 'Service not found' });
+        // If deletion failed, it's likely due to invoice references
+        return res.status(409).json({ 
+          error: 'Cannot delete service', 
+          message: 'This service is referenced by existing invoices and cannot be deleted to preserve historical data.' 
+        });
       }
       res.status(204).send();
     } catch (error) {

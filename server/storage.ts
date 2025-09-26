@@ -27,10 +27,10 @@ import {
 import { randomUUID } from "crypto";
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
-import { eq, and, lt, gte, lte, ne } from "drizzle-orm";
+import { eq, and, lt, gte, lte, ne, sql, inArray } from "drizzle-orm";
 
-const sql = neon(process.env.DATABASE_URL!);
-const db = drizzle(sql);
+const connection = neon(process.env.DATABASE_URL!);
+const db = drizzle(connection);
 
 export interface IStorage {
   // User operations - Extended for custom authentication
@@ -548,8 +548,34 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteClient(id: string): Promise<boolean> {
-    const result = await db.delete(clients).where(eq(clients.id, id));
-    return result.rowCount > 0;
+    try {
+      // Use transaction for data consistency
+      return await db.transaction(async (tx) => {
+        // Get all invoices for this client
+        const clientInvoices = await tx.select({ id: invoices.id }).from(invoices).where(eq(invoices.clientId, id));
+        const invoiceIds = clientInvoices.map(inv => inv.id);
+        
+        // Delete all invoice services for this client's invoices (batch operation)
+        if (invoiceIds.length > 0) {
+          await tx.delete(invoiceServices).where(
+            inArray(invoiceServices.invoiceId, invoiceIds)
+          );
+        }
+        
+        // Delete all invoices for this client
+        await tx.delete(invoices).where(eq(invoices.clientId, id));
+        
+        // Delete all client-service assignments for this client
+        await tx.delete(clientServices).where(eq(clientServices.clientId, id));
+        
+        // Finally, delete the client
+        const result = await tx.delete(clients).where(eq(clients.id, id));
+        return result.rowCount > 0;
+      });
+    } catch (error) {
+      console.error('Error deleting client:', error);
+      return false;
+    }
   }
 
   // Service operations
@@ -576,8 +602,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteService(id: string): Promise<boolean> {
-    const result = await db.delete(services).where(eq(services.id, id));
-    return result.rowCount > 0;
+    try {
+      // Check if service is referenced by any invoices - prevent deletion to preserve historical data
+      const referencedInvoices = await db.select().from(invoiceServices).where(eq(invoiceServices.serviceId, id));
+      if (referencedInvoices.length > 0) {
+        console.log(`Cannot delete service ${id}: referenced by ${referencedInvoices.length} invoice(s)`);
+        return false;
+      }
+      
+      // Delete all client-service assignments for this service
+      await db.delete(clientServices).where(eq(clientServices.serviceId, id));
+      
+      // Finally, delete the service
+      const result = await db.delete(services).where(eq(services.id, id));
+      return result.rowCount > 0;
+    } catch (error) {
+      console.error('Error deleting service:', error);
+      return false;
+    }
   }
 
   // Client-Service relationships
