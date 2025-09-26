@@ -1,4 +1,5 @@
 import { useForm } from "react-hook-form";
+import { useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,27 @@ export function ServiceForm({ isOpen, onOpenChange, onSubmit, initialData, title
       billingPeriod: initialData?.billingPeriod || "monthly",
     },
   });
+
+  // Reset form when initialData changes (for editing existing services)
+  useEffect(() => {
+    if (initialData) {
+      // Editing existing service
+      form.reset({
+        name: initialData.name || "",
+        description: initialData.description || "",
+        price: initialData.price || "",
+        billingPeriod: initialData.billingPeriod || "monthly",
+      });
+    } else if (isOpen) {
+      // Creating new service - reset to blank form
+      form.reset({
+        name: "",
+        description: "",
+        price: "",
+        billingPeriod: "monthly",
+      });
+    }
+  }, [initialData, isOpen, form]);
 
   const handleSubmit = (data: ServiceFormData) => {
     onSubmit(data);
@@ -138,7 +160,7 @@ export function ServiceForm({ isOpen, onOpenChange, onSubmit, initialData, title
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Periudha *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger data-testid="select-billing-period">
                           <SelectValue placeholder="Zgjidh periudhën" />
