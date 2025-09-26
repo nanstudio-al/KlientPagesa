@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "./StatusBadge";
-import { FileText, DollarSign, Download, Mail, Package } from "lucide-react";
+import { Calendar, FileText, DollarSign, Download, Mail, Package } from "lucide-react";
 import type { InvoiceWithServices } from "@shared/schema";
 
 interface InvoiceCardProps {
@@ -37,133 +37,109 @@ export function InvoiceCard({ invoice, onMarkPaid, onSendEmail, onDownload }: In
     return invoice.serviceName || "N/A";
   };
 
-  // Get the total amount
+  // Get the total amount (new or legacy)
   const getTotalAmount = () => {
-    return invoice.totalAmount || "0";
+    return invoice.totalAmount || invoice.amount || "0";
   };
 
   return (
-    <Card className="hover-elevate transition-all duration-200 border-0 shadow-sm bg-card/50 backdrop-blur-sm" data-testid={`card-invoice-${invoice.id}`}>
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="p-1.5 rounded-md bg-primary/10">
-                <FileText className="w-3.5 h-3.5 text-primary" />
-              </div>
-              <h3 className="font-semibold text-base truncate" data-testid={`text-invoice-client-${invoice.id}`}>
-                {invoice.clientName}
-              </h3>
-            </div>
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+    <Card className="hover-elevate" data-testid={`card-invoice-${invoice.id}`}>
+      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-2">
+        <div className="flex items-center gap-2">
+          <FileText className="w-4 h-4 text-muted-foreground" />
+          <div>
+            <h3 className="font-semibold" data-testid={`text-invoice-client-${invoice.id}`}>
+              {invoice.clientName}
+            </h3>
+            <div className="flex items-center gap-1 text-sm text-muted-foreground">
               <Package className="w-3 h-3" />
-              <span className="truncate" data-testid={`text-invoice-service-${invoice.id}`}>
+              <span data-testid={`text-invoice-service-${invoice.id}`}>
                 {getServicesDisplay()}
               </span>
             </div>
           </div>
-          <StatusBadge status={isOverdue ? 'overdue' : invoice.status} />
         </div>
-        
-        {/* Amount display - more prominent */}
-        <div className="mt-3 p-3 rounded-lg bg-muted/50">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Totali</span>
-            <div className="flex items-center gap-1.5">
-              <DollarSign className="w-4 h-4 text-primary" />
-              <span className="text-xl font-bold text-foreground" data-testid={`text-invoice-amount-${invoice.id}`}>
-                {getTotalAmount()}€
-              </span>
-            </div>
+        <StatusBadge status={isOverdue ? 'overdue' : invoice.status} />
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <DollarSign className="w-4 h-4 text-muted-foreground" />
+            <span className="text-xl font-mono font-semibold" data-testid={`text-invoice-amount-${invoice.id}`}>
+              {getTotalAmount()}€
+            </span>
           </div>
         </div>
-      </CardHeader>
-      
-      <CardContent className="pt-0 space-y-4">
+
         {/* Show detailed services breakdown if multiple services */}
         {invoice.services && invoice.services.length > 1 && (
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Shërbimet</p>
-            <div className="space-y-1.5">
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Shërbimet:</p>
+            <div className="space-y-1 text-xs">
               {invoice.services.map((service, index) => (
-                <div key={`${service.serviceId}-${index}`} className="flex justify-between items-center py-1 text-sm">
-                  <span className="flex-1 truncate">{service.service.name}</span>
-                  <span className="font-medium text-muted-foreground ml-2">
-                    {service.quantity}x {service.unitPrice}€
-                  </span>
+                <div key={`${service.serviceId}-${index}`} className="flex justify-between">
+                  <span>{service.service.name}</span>
+                  <span>{service.quantity}x {service.unitPrice}€</span>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Date information */}
-        <div className="space-y-2">
-          <div className="grid grid-cols-1 gap-2 text-sm">
-            <div className="flex items-center justify-between py-1">
-              <span className="text-muted-foreground">Lëshuar</span>
-              <span className="font-medium" data-testid={`text-invoice-issue-date-${invoice.id}`}>
-                {formatDate(invoice.issueDate)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between py-1">
-              <span className="text-muted-foreground">Skadenca</span>
-              <span 
-                className={`font-medium ${
-                  isOverdue ? 'text-destructive' : 'text-foreground'
-                }`}
-                data-testid={`text-invoice-due-date-${invoice.id}`}
-              >
-                {formatDate(invoice.dueDate)}
-              </span>
-            </div>
-            {invoice.paidDate && (
-              <div className="flex items-center justify-between py-1">
-                <span className="text-muted-foreground">Paguar</span>
-                <span className="font-medium text-chart-2" data-testid={`text-invoice-paid-date-${invoice.id}`}>
-                  {formatDate(invoice.paidDate)}
-                </span>
-              </div>
-            )}
+        <div className="space-y-2 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Data e lëshimit:</span>
+            <span data-testid={`text-invoice-issue-date-${invoice.id}`}>
+              {formatDate(invoice.issueDate)}
+            </span>
           </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Data e skadencës:</span>
+            <span 
+              className={isOverdue ? 'text-destructive font-medium' : ''}
+              data-testid={`text-invoice-due-date-${invoice.id}`}
+            >
+              {formatDate(invoice.dueDate)}
+            </span>
+          </div>
+          {invoice.paidDate && (
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Data e pagesës:</span>
+              <span className="text-chart-2 font-medium" data-testid={`text-invoice-paid-date-${invoice.id}`}>
+                {formatDate(invoice.paidDate)}
+              </span>
+            </div>
+          )}
         </div>
 
-        {/* Action buttons */}
-        <div className="flex flex-col sm:flex-row gap-2 pt-2">
+        <div className="flex gap-2">
           {invoice.status !== 'paid' && (
             <Button 
               onClick={onMarkPaid}
               variant="default" 
               size="sm"
-              className="flex-1 h-9"
+              className="flex-1"
               data-testid={`button-mark-paid-${invoice.id}`}
             >
-              <span className="hidden sm:inline">Shëno si të paguar</span>
-              <span className="sm:hidden">Paguar</span>
+              Shëno si të paguar
             </Button>
           )}
-          <div className="flex gap-2 sm:flex-shrink-0">
-            <Button 
-              onClick={onSendEmail}
-              variant="outline" 
-              size="sm"
-              className="flex-1 sm:flex-none sm:w-9 h-9"
-              data-testid={`button-send-email-${invoice.id}`}
-            >
-              <Mail className="w-4 h-4" />
-              <span className="ml-1 sm:hidden">Email</span>
-            </Button>
-            <Button 
-              onClick={onDownload}
-              variant="outline" 
-              size="sm"
-              className="flex-1 sm:flex-none sm:w-9 h-9"
-              data-testid={`button-download-${invoice.id}`}
-            >
-              <Download className="w-4 h-4" />
-              <span className="ml-1 sm:hidden">Shkarko</span>
-            </Button>
-          </div>
+          <Button 
+            onClick={onSendEmail}
+            variant="outline" 
+            size="sm"
+            data-testid={`button-send-email-${invoice.id}`}
+          >
+            <Mail className="w-4 h-4" />
+          </Button>
+          <Button 
+            onClick={onDownload}
+            variant="outline" 
+            size="sm"
+            data-testid={`button-download-${invoice.id}`}
+          >
+            <Download className="w-4 h-4" />
+          </Button>
         </div>
       </CardContent>
     </Card>
