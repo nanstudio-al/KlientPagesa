@@ -638,122 +638,120 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInvoice(invoice: InsertInvoice): Promise<InvoiceWithServices> {
-    return await db.transaction(async (tx) => {
-      // Generate next sequential invoice number 
-      const existingInvoices = await tx.select({ invoiceNumber: invoices.invoiceNumber }).from(invoices);
-      const existingNumbers = existingInvoices
-        .map(inv => inv.invoiceNumber)
-        .filter(num => num !== null && num !== undefined) as number[];
-      const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
-      let invoiceNumber = maxNumber + 1;
+    // Generate next sequential invoice number 
+    const existingInvoices = await db.select({ invoiceNumber: invoices.invoiceNumber }).from(invoices);
+    const existingNumbers = existingInvoices
+      .map(inv => inv.invoiceNumber)
+      .filter(num => num !== null && num !== undefined) as number[];
+    const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
+    let invoiceNumber = maxNumber + 1;
+    
+    // Calculate totals and prepare service lines
+    let totalAmount = 0;
+    const serviceLines: InsertInvoiceService[] = [];
       
-      // Calculate totals and prepare service lines
-      let totalAmount = 0;
-      const serviceLines: InsertInvoiceService[] = [];
+    for (const service of invoice.services) {
+      // Get service details to determine unit price
+      const [serviceDetails] = await db.select().from(services).where(eq(services.id, service.serviceId));
+      if (!serviceDetails) {
+        throw new Error(`Service not found: ${service.serviceId}`);
+      }
       
-      for (const service of invoice.services) {
-        // Get service details to determine unit price
-        const [serviceDetails] = await tx.select().from(services).where(eq(services.id, service.serviceId));
-        if (!serviceDetails) {
-          throw new Error(`Service not found: ${service.serviceId}`);
-        }
+      const unitPrice = service.unitPrice ? parseFloat(service.unitPrice) : parseFloat(serviceDetails.price);
+      const lineTotal = unitPrice * service.quantity;
+      totalAmount += lineTotal;
+      
+      serviceLines.push({
+        serviceId: service.serviceId,
+        quantity: service.quantity,
+        unitPrice: unitPrice.toFixed(2),
+        lineTotal: lineTotal.toFixed(2),
+      });
+    }
+    
+    // Phase 3 dual-write: Write to both old and new structures with retry on unique violation
+    let newInvoice: Invoice;
+    let attempts = 0;
+    const maxAttempts = 5;
+      
+    while (attempts < maxAttempts) {
+      try {
+        const invoiceData = {
+          clientId: invoice.clientId,
+          dueDate: invoice.dueDate,
+          status: invoice.status || 'pending' as const,
+          paidDate: invoice.paidDate,
+          invoiceNumber,
+          // Legacy fields for backward compatibility
+          serviceId: invoice.services[0].serviceId, // First service for backward compatibility
+          amount: serviceLines[0].lineTotal, // First service amount for backward compatibility
+          // New field for multi-service support
+          totalAmount: totalAmount.toFixed(2),
+        };
         
-        const unitPrice = service.unitPrice ? parseFloat(service.unitPrice) : parseFloat(serviceDetails.price);
-        const lineTotal = unitPrice * service.quantity;
-        totalAmount += lineTotal;
-        
-        serviceLines.push({
-          serviceId: service.serviceId,
-          quantity: service.quantity,
-          unitPrice: unitPrice.toFixed(2),
-          lineTotal: lineTotal.toFixed(2),
-        });
-      }
-      
-      // Phase 3 dual-write: Write to both old and new structures with retry on unique violation
-      let newInvoice: Invoice;
-      let attempts = 0;
-      const maxAttempts = 5;
-      
-      while (attempts < maxAttempts) {
-        try {
-          const invoiceData = {
-            clientId: invoice.clientId,
-            dueDate: invoice.dueDate,
-            status: invoice.status || 'pending' as const,
-            paidDate: invoice.paidDate,
-            invoiceNumber,
-            // Legacy fields for backward compatibility
-            serviceId: invoice.services[0].serviceId, // First service for backward compatibility
-            amount: serviceLines[0].lineTotal, // First service amount for backward compatibility
-            // New field for multi-service support
-            totalAmount: totalAmount.toFixed(2),
-          };
-          
-          // Create the invoice record atomically
-          [newInvoice] = await tx.insert(invoices).values(invoiceData).returning();
-          break;
-        } catch (error: any) {
-          // Check if it's a unique constraint violation on invoice_number
-          if (error?.code === '23505' && error?.constraint?.includes('invoice_number')) {
-            attempts++;
-            if (attempts >= maxAttempts) {
-              throw new Error(`Failed to create invoice after ${maxAttempts} attempts due to number conflicts`);
-            }
-            // Increment invoice number and retry
-            invoiceNumber++;
-            continue;
+        // Create the invoice record
+        [newInvoice] = await db.insert(invoices).values(invoiceData).returning();
+        break;
+      } catch (error: any) {
+        // Check if it's a unique constraint violation on invoice_number
+        if (error?.code === '23505' && error?.constraint?.includes('invoice_number')) {
+          attempts++;
+          if (attempts >= maxAttempts) {
+            throw new Error(`Failed to create invoice after ${maxAttempts} attempts due to number conflicts`);
           }
-          // If it's not a unique constraint violation, rethrow the error
-          throw error;
+          // Increment invoice number and retry
+          invoiceNumber++;
+          continue;
         }
+        // If it's not a unique constraint violation, rethrow the error
+        throw error;
       }
-      
-      // Create invoice service records in the junction table atomically
-      for (const serviceLine of serviceLines) {
-        await tx.insert(invoiceServices).values({
-          invoiceId: newInvoice.id,
-          ...serviceLine,
-        });
-      }
-      
-      // Integrity check: Verify totalAmount equals sum of line totals
-      const storedServices = await tx
-        .select({ lineTotal: invoiceServices.lineTotal })
-        .from(invoiceServices)
-        .where(eq(invoiceServices.invoiceId, newInvoice.id));
-      
-      const calculatedTotal = storedServices.reduce((sum, s) => sum + parseFloat(s.lineTotal), 0);
-      const storedTotal = parseFloat(newInvoice.totalAmount);
-      
-      if (Math.abs(calculatedTotal - storedTotal) > 0.01) {
-        throw new Error(`Total amount mismatch: calculated ${calculatedTotal}, stored ${storedTotal}`);
-      }
-      
-      // Fetch services for the response (using transaction context)
-      const serviceRows = await tx
-        .select({
-          id: invoiceServices.id,
-          invoiceId: invoiceServices.invoiceId,
-          serviceId: invoiceServices.serviceId,
-          quantity: invoiceServices.quantity,
-          unitPrice: invoiceServices.unitPrice,
-          lineTotal: invoiceServices.lineTotal,
-          service: {
-            id: services.id,
-            name: services.name,
-            description: services.description,
-            price: services.price,
-            billingPeriod: services.billingPeriod,
-            createdAt: services.createdAt,
-          }
-        })
-        .from(invoiceServices)
-        .innerJoin(services, eq(invoiceServices.serviceId, services.id))
-        .where(eq(invoiceServices.invoiceId, newInvoice.id));
-      
-      return { ...newInvoice, services: serviceRows };
-    });
+    }
+    
+    // Create invoice service records in the junction table
+    for (const serviceLine of serviceLines) {
+      await db.insert(invoiceServices).values({
+        invoiceId: newInvoice.id,
+        ...serviceLine,
+      });
+    }
+    
+    // Integrity check: Verify totalAmount equals sum of line totals
+    const storedServices = await db
+      .select({ lineTotal: invoiceServices.lineTotal })
+      .from(invoiceServices)
+      .where(eq(invoiceServices.invoiceId, newInvoice.id));
+    
+    const calculatedTotal = storedServices.reduce((sum, s) => sum + parseFloat(s.lineTotal), 0);
+    const storedTotal = parseFloat(newInvoice.totalAmount);
+    
+    if (Math.abs(calculatedTotal - storedTotal) > 0.01) {
+      throw new Error(`Total amount mismatch: calculated ${calculatedTotal}, stored ${storedTotal}`);
+    }
+    
+    // Fetch services for the response
+    const serviceRows = await db
+      .select({
+        id: invoiceServices.id,
+        invoiceId: invoiceServices.invoiceId,
+        serviceId: invoiceServices.serviceId,
+        quantity: invoiceServices.quantity,
+        unitPrice: invoiceServices.unitPrice,
+        lineTotal: invoiceServices.lineTotal,
+        service: {
+          id: services.id,
+          name: services.name,
+          description: services.description,
+          price: services.price,
+          billingPeriod: services.billingPeriod,
+          createdAt: services.createdAt,
+        }
+      })
+      .from(invoiceServices)
+      .innerJoin(services, eq(invoiceServices.serviceId, services.id))
+      .where(eq(invoiceServices.invoiceId, newInvoice.id));
+    
+    return { ...newInvoice, services: serviceRows };
   }
 
   async updateInvoiceStatus(id: string, status: PaymentStatus, paidDate?: Date): Promise<Invoice | undefined> {

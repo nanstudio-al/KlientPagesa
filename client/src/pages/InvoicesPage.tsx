@@ -87,8 +87,21 @@ export default function InvoicesPage() {
   });
 
   const filteredInvoices = (invoices as any[]).filter((invoice: any) => {
-    const matchesSearch = invoice.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         invoice.serviceName.toLowerCase().includes(searchTerm.toLowerCase());
+    // Search across client name and all services
+    let matchesSearch = invoice.clientName.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Also search in services (new structure) or serviceName (legacy fallback)
+    if (!matchesSearch) {
+      if (invoice.services && invoice.services.length > 0) {
+        // Search across all services in the invoice
+        matchesSearch = invoice.services.some((service: any) => 
+          service.service.name.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      } else if (invoice.serviceName) {
+        // Fallback to legacy serviceName field
+        matchesSearch = invoice.serviceName.toLowerCase().includes(searchTerm.toLowerCase());
+      }
+    }
     const matchesStatus = statusFilter === "all" || invoice.status === statusFilter;
     
     // Date filtering

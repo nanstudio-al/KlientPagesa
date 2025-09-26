@@ -1,4 +1,4 @@
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery } from "@tanstack/react-query";
@@ -25,12 +25,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Trash2, Plus } from "lucide-react";
 import type { InsertInvoice } from "@shared/schema";
 
 const invoiceFormSchema = z.object({
   clientId: z.string().min(1, "Zgjidh një klient"),
-  serviceId: z.string().min(1, "Zgjidh një shërbim"),
-  amount: z.string().min(1, "Shuma është e detyrueshme").refine((val) => !isNaN(Number(val)) && Number(val) > 0, "Shuma duhet të jetë një numër pozitiv"),
+  services: z.array(z.object({
+    serviceId: z.string().min(1, "Zgjidh një shërbim"),
+    quantity: z.number().min(1, "Sasia duhet të jetë së paku 1"),
+  })).min(1, "Së paku një shërbim është i detyrueshëm"),
   dueDate: z.string().min(1, "Data e skadencës është e detyrueshme"),
 });
 
@@ -48,10 +51,14 @@ export function InvoiceForm({ isOpen, onOpenChange, onSubmit, title = "Faturë e
     resolver: zodResolver(invoiceFormSchema),
     defaultValues: {
       clientId: "",
-      serviceId: "",
-      amount: "",
+      services: [{ serviceId: "", quantity: 1 }],
       dueDate: "",
     },
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "services",
   });
 
   const { data: clients = [] } = useQuery({
@@ -67,13 +74,24 @@ export function InvoiceForm({ isOpen, onOpenChange, onSubmit, title = "Faturë e
   const handleSubmit = (data: InvoiceFormData) => {
     onSubmit({
       clientId: data.clientId,
-      serviceId: data.serviceId,
-      amount: data.amount,
+      services: data.services,
       dueDate: new Date(data.dueDate),
       status: 'pending' as const
     });
     form.reset();
     onOpenChange(false);
+  };
+
+  // Add a new service row
+  const addService = () => {
+    append({ serviceId: "", quantity: 1 });
+  };
+
+  // Remove a service row
+  const removeService = (index: number) => {
+    if (fields.length > 1) {
+      remove(index);
+    }
   };
 
   return (
@@ -109,54 +127,81 @@ export function InvoiceForm({ isOpen, onOpenChange, onSubmit, title = "Faturë e
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="serviceId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Shërbimi *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger data-testid="select-service">
-                        <SelectValue placeholder="Zgjidh shërbimin" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {(services as any[]).map((service) => (
-                        <SelectItem key={service.id} value={service.id}>
-                          {service.name} - {service.price}€/{service.billingPeriod === 'monthly' ? 'muaj' : service.billingPeriod === 'yearly' ? 'vit' : '3 muaj'}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <FormLabel>Shërbimet *</FormLabel>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addService}
+                  data-testid="button-add-service"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Shto shërbim
+                </Button>
+              </div>
 
-            <FormField
-              control={form.control}
-              name="amount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Shuma *</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <Input 
-                        placeholder="200" 
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        {...field} 
-                        data-testid="input-invoice-amount"
-                      />
-                      <span className="absolute right-3 top-2.5 text-sm text-muted-foreground">€</span>
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              {fields.map((field, index) => (
+                <div key={field.id} className="flex gap-2 items-end">
+                  <FormField
+                    control={form.control}
+                    name={`services.${index}.serviceId`}
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        {index === 0 && <FormLabel>Shërbimi</FormLabel>}
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid={`select-service-${index}`}>
+                              <SelectValue placeholder="Zgjidh shërbimin" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {(services as any[]).map((service) => (
+                              <SelectItem key={service.id} value={service.id}>
+                                {service.name} - {service.price}€/{service.billingPeriod === 'monthly' ? 'muaj' : service.billingPeriod === 'yearly' ? 'vit' : '3 muaj'}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name={`services.${index}.quantity`}
+                    render={({ field }) => (
+                      <FormItem className="w-20">
+                        {index === 0 && <FormLabel>Sasia</FormLabel>}
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="1"
+                            {...field}
+                            onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
+                            data-testid={`input-quantity-${index}`}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => removeService(index)}
+                    disabled={fields.length === 1}
+                    data-testid={`button-remove-service-${index}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
 
             <FormField
               control={form.control}
