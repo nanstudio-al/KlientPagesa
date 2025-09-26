@@ -14,8 +14,7 @@ import {
   Users, 
   Server, 
   FileText, 
-  BarChart3,
-  CreditCard 
+  BarChart3
 } from "lucide-react";
 
 const menuItems = [
@@ -38,11 +37,6 @@ const menuItems = [
     title: "Faturat",
     url: "/invoices",
     icon: FileText,
-  },
-  {
-    title: "Pagesat",
-    url: "/payments",
-    icon: CreditCard,
   },
   {
     title: "Raporte",
