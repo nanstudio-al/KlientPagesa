@@ -13,6 +13,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { LogOut } from "lucide-react";
+import logoPath from "@assets/NaN-Logotype-05-300x169 (2)_1758899258613.png";
 import DashboardPage from "@/pages/DashboardPage";
 import ClientsPage from "@/pages/ClientsPage";
 import ServicesPage from "@/pages/ServicesPage";
@@ -91,7 +92,12 @@ function AppContent() {
           <header className="flex items-center justify-between p-4 border-b bg-background">
             <div className="flex items-center gap-4">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
-              <h2 className="font-semibold text-lg">Menaxhimi i Klientëve</h2>
+              <img 
+                src={logoPath} 
+                alt="NaN Studio" 
+                className="h-8 w-auto" 
+                data-testid="img-logo"
+              />
             </div>
             <div className="flex items-center gap-2">
               <Button

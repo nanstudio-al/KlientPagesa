@@ -787,7 +787,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Content-Disposition', `inline; filename="fatura-${invoice.id.slice(-8)}.html"`);
       
-      // Enhanced HTML with print-specific CSS and auto-print functionality
+      // Enhanced HTML with modern design and logo
       const printableHtml = `
         <!DOCTYPE html>
         <html>
@@ -795,28 +795,274 @@ export async function registerRoutes(app: Express): Promise<Server> {
           <meta charset="utf-8">
           <title>Fatura ${invoice.id}</title>
           <style>
-            body { font-family: Arial, sans-serif; margin: 40px; }
-            .header { border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
-            .invoice-number { font-size: 24px; font-weight: bold; color: #333; }
-            .client-info, .invoice-details { margin-bottom: 30px; }
-            .label { font-weight: bold; color: #555; }
-            .amount { font-size: 20px; font-weight: bold; color: #2563eb; }
-            .status { padding: 4px 12px; border-radius: 4px; color: white; }
-            .status.paid { background-color: #16a34a; }
-            .status.pending { background-color: #f59e0b; }
-            .status.overdue { background-color: #dc2626; }
-            .print-actions { margin: 20px 0; text-align: center; background: #f8f9fa; padding: 15px; border-radius: 8px; }
-            .print-actions button { 
-              background: #2563eb; color: white; border: none; padding: 12px 24px; 
-              border-radius: 6px; margin: 0 10px; cursor: pointer; font-size: 16px;
-              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
             }
-            .print-actions button:hover { background: #1d4ed8; transform: translateY(-1px); }
-            .print-actions button.secondary { background: #6b7280; }
-            .print-actions button.secondary:hover { background: #4b5563; }
+            
+            body { 
+              font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              line-height: 1.6;
+              color: #1f2937;
+              background: white;
+              padding: 40px;
+            }
+            
+            .print-actions { 
+              margin-bottom: 30px;
+              text-align: center;
+              background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+              padding: 20px;
+              border-radius: 12px;
+              box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+            }
+            
+            .print-actions button { 
+              background: white;
+              color: #1d4ed8;
+              border: none;
+              padding: 14px 28px;
+              border-radius: 8px;
+              margin: 0 10px;
+              cursor: pointer;
+              font-size: 16px;
+              font-weight: 600;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+              transition: all 0.2s ease;
+            }
+            
+            .print-actions button:hover { 
+              transform: translateY(-2px);
+              box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            }
+            
+            .print-actions button.secondary { 
+              background: transparent;
+              color: white;
+              border: 2px solid white;
+            }
+            
+            .print-actions button.secondary:hover { 
+              background: white;
+              color: #1d4ed8;
+            }
+            
+            .invoice-container {
+              background: white;
+              border-radius: 16px;
+              box-shadow: 0 4px 25px rgba(0, 0, 0, 0.08);
+              overflow: hidden;
+            }
+            
+            .invoice-header {
+              background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+              color: white;
+              padding: 40px;
+              position: relative;
+            }
+            
+            .logo-section {
+              display: flex;
+              align-items: center;
+              gap: 20px;
+              margin-bottom: 30px;
+            }
+            
+            .logo-placeholder {
+              width: 120px;
+              height: 60px;
+              background: rgba(255, 255, 255, 0.1);
+              border-radius: 8px;
+              border: 2px dashed rgba(255, 255, 255, 0.3);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 12px;
+              color: rgba(255, 255, 255, 0.8);
+            }
+            
+            .company-info h1 {
+              font-size: 28px;
+              font-weight: 700;
+              margin-bottom: 8px;
+            }
+            
+            .company-info p {
+              font-size: 16px;
+              opacity: 0.9;
+            }
+            
+            .invoice-meta {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 30px;
+              margin-top: 30px;
+            }
+            
+            .invoice-number {
+              font-size: 32px;
+              font-weight: 800;
+              margin-bottom: 10px;
+            }
+            
+            .invoice-dates {
+              text-align: right;
+            }
+            
+            .date-item {
+              margin-bottom: 8px;
+            }
+            
+            .date-label {
+              font-size: 14px;
+              opacity: 0.8;
+              display: block;
+            }
+            
+            .date-value {
+              font-size: 16px;
+              font-weight: 600;
+            }
+            
+            .invoice-body {
+              padding: 40px;
+            }
+            
+            .billing-section {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 40px;
+              margin-bottom: 40px;
+              padding: 30px;
+              background: #f8fafc;
+              border-radius: 12px;
+              border: 1px solid #e2e8f0;
+            }
+            
+            .section-title {
+              font-size: 18px;
+              font-weight: 700;
+              color: #0f172a;
+              margin-bottom: 20px;
+              padding-bottom: 10px;
+              border-bottom: 2px solid #0ea5e9;
+            }
+            
+            .info-item {
+              display: flex;
+              margin-bottom: 12px;
+            }
+            
+            .info-label {
+              font-weight: 600;
+              color: #475569;
+              min-width: 120px;
+            }
+            
+            .info-value {
+              color: #1e293b;
+              flex: 1;
+            }
+            
+            .service-details {
+              background: white;
+              border: 1px solid #e2e8f0;
+              border-radius: 12px;
+              overflow: hidden;
+              margin-bottom: 40px;
+            }
+            
+            .service-header {
+              background: #0ea5e9;
+              color: white;
+              padding: 20px;
+              font-size: 18px;
+              font-weight: 700;
+            }
+            
+            .service-content {
+              padding: 30px;
+            }
+            
+            .service-item {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              padding: 15px 0;
+              border-bottom: 1px solid #f1f5f9;
+            }
+            
+            .service-item:last-child {
+              border-bottom: none;
+            }
+            
+            .service-name {
+              font-size: 16px;
+              font-weight: 600;
+              color: #1e293b;
+            }
+            
+            .service-description {
+              font-size: 14px;
+              color: #64748b;
+              margin-top: 4px;
+            }
+            
+            .amount {
+              font-size: 24px;
+              font-weight: 800;
+              color: #0ea5e9;
+            }
+            
+            .status {
+              padding: 8px 16px;
+              border-radius: 20px;
+              font-size: 14px;
+              font-weight: 600;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            }
+            
+            .status.paid {
+              background: #dcfce7;
+              color: #166534;
+            }
+            
+            .status.pending {
+              background: #fef3c7;
+              color: #92400e;
+            }
+            
+            .status.overdue {
+              background: #fee2e2;
+              color: #991b1b;
+            }
+            
+            .footer {
+              text-align: center;
+              padding: 30px;
+              background: #f8fafc;
+              border-top: 1px solid #e2e8f0;
+              margin-top: 40px;
+            }
+            
+            .footer-text {
+              color: #64748b;
+              font-size: 14px;
+              line-height: 1.5;
+            }
+            
+            .footer-logo {
+              margin-top: 20px;
+              font-weight: 600;
+              color: #0ea5e9;
+            }
+            
             @media print {
-              .print-actions { display: none; }
-              body { margin: 0; }
+              .print-actions { display: none !important; }
+              body { padding: 20px; }
+              .invoice-container { box-shadow: none; }
             }
           </style>
         </head>
@@ -826,36 +1072,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
             <button id="close-btn" class="secondary">❌ Mbyll</button>
           </div>
           
-          <div class="header">
-            <div class="invoice-number">FATURA #${invoice.id.slice(-8).toUpperCase()}</div>
-            <p>Data e lëshimit: ${new Date(invoice.issueDate).toLocaleDateString('sq-AL')}</p>
-            <p>Skadenca: ${new Date(invoice.dueDate).toLocaleDateString('sq-AL')}</p>
-          </div>
-          
-          <div class="client-info">
-            <h3>Faturuar për:</h3>
-            <p><span class="label">Klienti:</span> ${client.name}</p>
-            <p><span class="label">Email:</span> ${client.email}</p>
-            ${client.phone ? `<p><span class="label">Telefoni:</span> ${client.phone}</p>` : ''}
-            ${client.address ? `<p><span class="label">Adresa:</span> ${client.address}</p>` : ''}
-            ${client.taxId ? `<p><span class="label">Numri Fiskal:</span> ${client.taxId}</p>` : ''}
-          </div>
-          
-          <div class="invoice-details">
-            <h3>Detajet e shërbimit:</h3>
-            <p><span class="label">Shërbimi:</span> ${service.name}</p>
-            <p><span class="label">Përshkrimi:</span> ${service.description || 'N/A'}</p>
-            <p><span class="label">Çmimi:</span> <span class="amount">${invoice.amount}€</span></p>
-            <p><span class="label">Statusi:</span> 
-              <span class="status ${invoice.status}">
-                ${invoice.status === 'paid' ? 'Paguar' : invoice.status === 'pending' ? 'Në pritje' : 'Vonesa'}
-              </span>
-            </p>
-            ${invoice.paidDate ? `<p><span class="label">Data e pagesës:</span> ${new Date(invoice.paidDate).toLocaleDateString('sq-AL')}</p>` : ''}
-          </div>
-          
-          <div style="margin-top: 50px; text-align: center; color: #666; font-size: 12px;">
-            <p>Ky dokument është gjeneruar automatikisht nga sistemi i menaxhimit të klientëve</p>
+          <div class="invoice-container">
+            <div class="invoice-header">
+              <div class="logo-section">
+                <div class="logo-placeholder">NaN Studio</div>
+                <div class="company-info">
+                  <h1>NaN Studio</h1>
+                  <p>Professional Technology Services</p>
+                </div>
+              </div>
+              
+              <div class="invoice-meta">
+                <div class="invoice-number-section">
+                  <div class="invoice-number">FATURA #${invoice.id.slice(-8).toUpperCase()}</div>
+                </div>
+                <div class="invoice-dates">
+                  <div class="date-item">
+                    <span class="date-label">Data e lëshimit:</span>
+                    <span class="date-value">${new Date(invoice.issueDate).toLocaleDateString('sq-AL')}</span>
+                  </div>
+                  <div class="date-item">
+                    <span class="date-label">Skadenca:</span>
+                    <span class="date-value">${new Date(invoice.dueDate).toLocaleDateString('sq-AL')}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="invoice-body">
+              <div class="billing-section">
+                <div>
+                  <h3 class="section-title">Faturuar për:</h3>
+                  <div class="info-item">
+                    <span class="info-label">Klienti:</span>
+                    <span class="info-value">${client.name}</span>
+                  </div>
+                  <div class="info-item">
+                    <span class="info-label">Email:</span>
+                    <span class="info-value">${client.email}</span>
+                  </div>
+                  ${client.phone ? `
+                    <div class="info-item">
+                      <span class="info-label">Telefoni:</span>
+                      <span class="info-value">${client.phone}</span>
+                    </div>
+                  ` : ''}
+                  ${client.address ? `
+                    <div class="info-item">
+                      <span class="info-label">Adresa:</span>
+                      <span class="info-value">${client.address}</span>
+                    </div>
+                  ` : ''}
+                  ${client.taxId ? `
+                    <div class="info-item">
+                      <span class="info-label">Numri Fiskal:</span>
+                      <span class="info-value">${client.taxId}</span>
+                    </div>
+                  ` : ''}
+                </div>
+                
+                <div>
+                  <h3 class="section-title">Statusi i Pagesës:</h3>
+                  <div class="info-item">
+                    <span class="info-label">Statusi:</span>
+                    <span class="status ${invoice.status}">
+                      ${invoice.status === 'paid' ? 'Paguar' : invoice.status === 'pending' ? 'Në pritje' : 'Vonesa'}
+                    </span>
+                  </div>
+                  ${invoice.paidDate ? `
+                    <div class="info-item">
+                      <span class="info-label">Data e pagesës:</span>
+                      <span class="info-value">${new Date(invoice.paidDate).toLocaleDateString('sq-AL')}</span>
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+              
+              <div class="service-details">
+                <div class="service-header">Detajet e Shërbimit</div>
+                <div class="service-content">
+                  <div class="service-item">
+                    <div>
+                      <div class="service-name">${service.name}</div>
+                      <div class="service-description">${service.description || 'Shërbim profesional teknologjik'}</div>
+                    </div>
+                    <div class="amount">${invoice.amount}€</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="footer">
+              <div class="footer-text">
+                Ky dokument është gjeneruar automatikisht nga sistemi i menaxhimit të klientëve<br>
+                Faleminderit që zgjodhët shërbimet tona profesionale
+              </div>
+              <div class="footer-logo">NaN Studio - Professional Technology Services</div>
+            </div>
           </div>
           
           <script>

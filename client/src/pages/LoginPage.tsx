@@ -9,7 +9,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Shield } from "lucide-react";
+import logoPath from "@assets/NaN-Logotype-05-300x169 (2)_1758899258613.png";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -69,7 +69,12 @@ export default function LoginPage() {
         {/* Application Title */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <Shield className="w-12 h-12 text-blue-600" />
+            <img 
+              src={logoPath} 
+              alt="NaN Studio" 
+              className="h-16 w-auto" 
+              data-testid="img-login-logo"
+            />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
             Menaxhimi i Klientëve
