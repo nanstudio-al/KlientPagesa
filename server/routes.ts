@@ -1,11 +1,14 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertClientSchema, insertServiceSchema, insertInvoiceSchema } from "@shared/schema";
+import { insertClientSchema, insertServiceSchema, insertInvoiceSchema, loginSchema, type User, type UserRole } from "@shared/schema";
 import { z } from "zod";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import bcrypt from "bcryptjs";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
+const pgSession = connectPgSimple(session);
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Trust proxy for correct IP handling behind reverse proxy/CDN
@@ -48,15 +51,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
     standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-    // Skip rate limiting for auth callback endpoints (they may have different patterns)
+    // Skip rate limiting for auth endpoints
     skip: (req) => {
-      const authCallbackPaths = ['/api/login', '/api/callback', '/api/logout'];
+      const authPaths = ['/api/auth/login', '/api/auth/logout'];
       try {
         const url = new URL(req.originalUrl, `${req.protocol}://${req.get('host')}`);
-        return authCallbackPaths.some(path => url.pathname.startsWith(path));
+        return authPaths.some(path => url.pathname.startsWith(path));
       } catch {
         // Fallback to original logic if URL parsing fails
-        return authCallbackPaths.includes(req.originalUrl);
+        return authPaths.includes(req.originalUrl);
       }
     },
   });
@@ -118,13 +121,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   });
 
-  // Auth middleware - from Replit Auth integration
-  await setupAuth(app);
+  // Validate required environment variables
+  if (!process.env.SESSION_SECRET) {
+    console.error('FATAL: SESSION_SECRET environment variable is required');
+    process.exit(1);
+  }
 
-  // Protected API routes - all routes under /api/* require authentication except auth flow routes
+  // Session configuration for custom authentication
+  app.use(session({
+    store: new pgSession({
+      conObject: {
+        connectionString: process.env.DATABASE_URL,
+      },
+      tableName: 'sessions',
+      createTableIfMissing: isDevelopment, // Allow table creation in development
+    }),
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: !isDevelopment, // HTTPS only in production
+      httpOnly: true, // Prevent XSS
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      sameSite: 'lax' // CSRF protection
+    },
+    name: 'sessionId'
+  }));
+
+  // Custom authentication middleware
+  const isAuthenticated = (req: any, res: any, next: any) => {
+    if (req.session && req.session.user) {
+      return next();
+    }
+    return res.status(401).json({ message: 'Unauthorized' });
+  };
+
+  // Role-based access control middleware
+  const requireRole = (role: UserRole) => {
+    return async (req: any, res: any, next: any) => {
+      if (!req.session || !req.session.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      // Fetch fresh user data to check current role
+      const user = await storage.getUser(req.session.user.id);
+      if (!user || user.role !== role || !user.isActive) {
+        return res.status(403).json({ message: 'Forbidden: Insufficient privileges' });
+      }
+      
+      next();
+    };
+  };
+
+  // Protected API routes - all routes under /api/* require authentication except auth routes
   app.use('/api', (req, res, next) => {
-    // Whitelist auth flow routes that should be public
-    const publicRoutes = ['/api/login', '/api/callback', '/api/logout'];
+    // Whitelist public auth routes (req.path excludes the mounted path /api)
+    const publicRoutes = ['/auth/login'];
     if (publicRoutes.includes(req.path)) {
       return next();
     }
@@ -132,15 +184,272 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return isAuthenticated(req, res, next);
   });
 
-  // Auth routes - from Replit Auth integration  
-  app.get('/api/auth/user', async (req: any, res) => {
+  // Strict rate limiting for login attempts
+  const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // Limit each IP to 5 login attempts per window
+    message: {
+      error: "Too many login attempts from this IP, please try again later."
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  // Custom authentication routes
+  app.post('/api/auth/login', loginLimiter, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      res.json(user);
+      // Only log in development - avoid sensitive data in production logs
+      if (isDevelopment) {
+        console.log("Login attempt for:", req.body.username);
+      }
+      
+      const validatedData = loginSchema.parse(req.body);
+      const { username, password } = validatedData;
+      
+      // Find user by username
+      const user = await storage.getUserByUsername(username);
+      if (!user) {
+        return res.status(401).json({ message: 'Invalid username or password' });
+      }
+      
+      // Check if user is active
+      if (!user.isActive) {
+        return res.status(401).json({ message: 'Account is deactivated' });
+      }
+      
+      // Verify password
+      const isValidPassword = await bcrypt.compare(password, user.passwordHash);
+      if (!isValidPassword) {
+        return res.status(401).json({ message: 'Invalid username or password' });
+      }
+      
+      // Create session
+      req.session.user = {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName
+      };
+      
+      // Regenerate session ID for security
+      req.session.regenerate((err: any) => {
+        if (err) {
+          console.error('Session regeneration error:', err);
+          return res.status(500).json({ message: 'Login failed' });
+        }
+        
+        req.session.user = {
+          id: user.id,
+          username: user.username,
+          role: user.role,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName
+        };
+        
+        res.json({ 
+          message: 'Login successful',
+          user: {
+            id: user.id,
+            username: user.username,
+            role: user.role,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName
+          }
+        });
+      });
     } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: 'Validation failed', 
+          details: isDevelopment ? error.errors : undefined 
+        });
+      }
+      console.error('Login error:', error);
+      res.status(500).json({ message: 'Login failed' });
+    }
+  });
+
+  app.post('/api/auth/logout', async (req: any, res) => {
+    try {
+      req.session.destroy((err: any) => {
+        if (err) {
+          console.error('Session destruction error:', err);
+          return res.status(500).json({ message: 'Logout failed' });
+        }
+        res.clearCookie('sessionId');
+        res.status(204).send();
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+      res.status(500).json({ message: 'Logout failed' });
+    }
+  });
+
+  app.get('/api/auth/me', async (req: any, res) => {
+    try {
+      if (!req.session || !req.session.user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      // Fetch fresh user data from database
+      const user = await storage.getUser(req.session.user.id);
+      if (!user || !user.isActive) {
+        // Clear invalid session
+        req.session.destroy((err: any) => {
+          if (err) console.error('Session cleanup error:', err);
+        });
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      res.json({
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName
+      });
+    } catch (error) {
+      console.error('Get user error:', error);
+      res.status(500).json({ message: 'Failed to fetch user' });
+    }
+  });
+
+  // Admin user management routes (admin-only)
+  app.get('/api/admin/users', requireRole('admin'), async (req: any, res) => {
+    try {
+      const users = await storage.listUsers();
+      // Remove sensitive data from response
+      const safeUsers = users.map(user => ({
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        isActive: user.isActive,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt
+      }));
+      res.json(safeUsers);
+    } catch (error) {
+      console.error('List users error:', error);
+      res.status(500).json({ message: 'Failed to fetch users' });
+    }
+  });
+
+  app.post('/api/admin/users', requireRole('admin'), async (req: any, res) => {
+    try {
+      const { username, password, email, firstName, lastName, role } = req.body;
+      
+      // Check if username already exists
+      const existingUser = await storage.getUserByUsername(username);
+      if (existingUser) {
+        return res.status(400).json({ message: 'Username already exists' });
+      }
+      
+      // Hash password
+      const passwordHash = await bcrypt.hash(password, 12);
+      
+      // Create user
+      const newUser = await storage.createUser({
+        username,
+        passwordHash,
+        email: email || null,
+        firstName: firstName || null,
+        lastName: lastName || null,
+        role: role || 'user',
+        isActive: 1
+      });
+      
+      // Return safe user data (no password hash)
+      res.status(201).json({
+        id: newUser.id,
+        username: newUser.username,
+        email: newUser.email,
+        firstName: newUser.firstName,
+        lastName: newUser.lastName,
+        role: newUser.role,
+        isActive: newUser.isActive,
+        createdAt: newUser.createdAt
+      });
+    } catch (error) {
+      console.error('Create user error:', error);
+      res.status(500).json({ message: 'Failed to create user' });
+    }
+  });
+
+  app.patch('/api/admin/users/:id', requireRole('admin'), async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { username, email, firstName, lastName, role, isActive } = req.body;
+      
+      // Prevent self-demotion
+      const currentUser = req.session.user;
+      if (id === currentUser.id && role !== 'admin') {
+        return res.status(400).json({ message: 'Cannot demote yourself from admin' });
+      }
+      
+      // Prevent self-deactivation
+      if (id === currentUser.id && isActive === 0) {
+        return res.status(400).json({ message: 'Cannot deactivate your own account' });
+      }
+      
+      const updatedUser = await storage.updateUser(id, {
+        username,
+        email,
+        firstName,
+        lastName,
+        role,
+        isActive
+      });
+      
+      if (!updatedUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+      
+      // Return safe user data
+      res.json({
+        id: updatedUser.id,
+        username: updatedUser.username,
+        email: updatedUser.email,
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
+        role: updatedUser.role,
+        isActive: updatedUser.isActive,
+        updatedAt: updatedUser.updatedAt
+      });
+    } catch (error) {
+      console.error('Update user error:', error);
+      res.status(500).json({ message: 'Failed to update user' });
+    }
+  });
+
+  app.post('/api/admin/users/:id/password', requireRole('admin'), async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { password } = req.body;
+      
+      if (!password || password.length < 6) {
+        return res.status(400).json({ message: 'Password must be at least 6 characters' });
+      }
+      
+      // Hash new password
+      const passwordHash = await bcrypt.hash(password, 12);
+      
+      const updatedUser = await storage.setUserPassword(id, passwordHash);
+      if (!updatedUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+      
+      res.json({ message: 'Password updated successfully' });
+    } catch (error) {
+      console.error('Reset password error:', error);
+      res.status(500).json({ message: 'Failed to reset password' });
     }
   });
   // Client routes

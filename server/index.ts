@@ -1,6 +1,8 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { storage } from "./storage";
+import bcrypt from "bcryptjs";
 
 const app = express();
 app.use(express.json());
@@ -36,8 +38,71 @@ app.use((req, res, next) => {
   next();
 });
 
+// Admin user seeding function
+async function seedAdminUser() {
+  try {
+    // Check if any admin users exist
+    const users = await storage.listUsers();
+    const adminUsers = users.filter(user => user.role === 'admin' && user.isActive);
+    
+    if (adminUsers.length === 0) {
+      const adminUsername = process.env.ADMIN_USERNAME || 'admin';
+      const adminPassword = process.env.ADMIN_PASSWORD;
+      
+      if (!adminPassword) {
+        if (process.env.NODE_ENV === 'production') {
+          log('ERROR: ADMIN_PASSWORD environment variable is required in production');
+          process.exit(1);
+        } else {
+          // Auto-generate password in development
+          const generatedPassword = 'admin123';
+          log(`No admin user found. Creating admin user with username: ${adminUsername} and password: ${generatedPassword}`);
+          
+          const passwordHash = await bcrypt.hash(generatedPassword, 12);
+          await storage.createUser({
+            username: adminUsername,
+            passwordHash,
+            email: 'admin@localhost',
+            firstName: 'Admin',
+            lastName: 'User',
+            role: 'admin',
+            isActive: 1
+          });
+          
+          log(`Admin user created successfully! Use username: ${adminUsername}, password: ${generatedPassword}`);
+        }
+      } else {
+        log(`Creating admin user with username: ${adminUsername}`);
+        
+        const passwordHash = await bcrypt.hash(adminPassword, 12);
+        await storage.createUser({
+          username: adminUsername,
+          passwordHash,
+          email: process.env.ADMIN_EMAIL || 'admin@localhost',
+          firstName: 'Admin',
+          lastName: 'User',
+          role: 'admin',
+          isActive: 1
+        });
+        
+        log('Admin user created successfully!');
+      }
+    } else {
+      log(`Found ${adminUsers.length} active admin user(s)`);
+    }
+  } catch (error) {
+    log('Error seeding admin user: ' + (error instanceof Error ? error.message : String(error)));
+    if (process.env.NODE_ENV === 'production') {
+      process.exit(1);
+    }
+  }
+}
+
 (async () => {
   const server = await registerRoutes(app);
+  
+  // Seed admin user on startup
+  await seedAdminUser();
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
