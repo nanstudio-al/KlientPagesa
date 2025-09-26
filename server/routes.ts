@@ -647,16 +647,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const invoices = await storage.getAllInvoices();
       
-      // Enrich with client and service names
+      // Enrich with client names (services are already included in InvoiceWithServices)
       const enrichedInvoices = await Promise.all(
         invoices.map(async (invoice) => {
           const client = await storage.getClient(invoice.clientId);
-          const service = await storage.getService(invoice.serviceId);
           
           return {
             ...invoice,
             clientName: client?.name || 'Unknown Client',
-            serviceName: service?.name || 'Unknown Service'
+            // Legacy field for backward compatibility (first service name)
+            serviceName: invoice.services.length > 0 ? invoice.services[0].service.name : 'No Services'
           };
         })
       );
@@ -729,12 +729,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Invoice not found' });
       }
 
-      // Get client and service details
+      // Get client details (services are already included in InvoiceWithServices)
       const client = await storage.getClient(invoice.clientId);
-      const service = await storage.getService(invoice.serviceId);
       
-      if (!client || !service) {
-        return res.status(404).json({ error: 'Client or service not found' });
+      if (!client) {
+        return res.status(404).json({ error: 'Client not found' });
+      }
+      
+      if (invoice.services.length === 0) {
+        return res.status(400).json({ error: 'Invoice has no services' });
       }
 
       // Base64 encoded NaN Studio logo
@@ -897,45 +900,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         yPos = 420;
         
-        // Service Details Section
+        // Services Details Section
         doc.rect(leftMargin, yPos, usableWidth, 30).fill('#ffffff').stroke('#e2e8f0');
         doc.font('Helvetica-Bold')
            .fontSize(16)
            .fill('#1e293b')
-           .text('Detajet e Shërbimit', leftMargin + 20, yPos + 8);
+           .text('Detajet e Shërbimeve', leftMargin + 20, yPos + 8);
         
         yPos += 30;
-        doc.rect(leftMargin, yPos, usableWidth, 80).fill('#ffffff').stroke('#e2e8f0');
-        yPos += 20;
         
-        // Service item - smaller text
+        // Services table header
+        doc.rect(leftMargin, yPos, usableWidth, 25).fill('#f1f5f9').stroke('#e2e8f0');
+        yPos += 5;
+        
         doc.font('Helvetica-Bold')
-           .fontSize(12)
-           .fill('#1e293b')
-           .text(service.name, leftMargin + 20, yPos, { width: usableWidth - 120 });
-        yPos += 20;
-        
-        doc.font('Helvetica')
            .fontSize(10)
-           .fill('#64748b')
-           .text(service.description || 'Shërbim profesional teknologjik', leftMargin + 20, yPos, { width: usableWidth - 120 });
+           .fill('#1e293b')
+           .text('Shërbimi', leftMargin + 10, yPos)
+           .text('Sasia', leftMargin + 250, yPos)
+           .text('Çmimi', leftMargin + 320, yPos)
+           .text('Totali', leftMargin + 400, yPos);
         
-        // Amount (right side) - separate number and Euro symbol for proper alignment
-        const amountText = invoice.amount.toString();
-        const amountX = rightMargin - 100;
-        const amountY = yPos - 20;
+        yPos += 20;
+        
+        // Loop through all services
+        for (const invoiceService of invoice.services) {
+          const serviceHeight = 50;
+          doc.rect(leftMargin, yPos, usableWidth, serviceHeight).fill('#ffffff').stroke('#e2e8f0');
+          
+          // Service name and description
+          doc.font('Helvetica-Bold')
+             .fontSize(12)
+             .fill('#1e293b')
+             .text(invoiceService.service.name, leftMargin + 10, yPos + 8, { width: 220 });
+          
+          if (invoiceService.service.description) {
+            doc.font('Helvetica')
+               .fontSize(9)
+               .fill('#64748b')
+               .text(invoiceService.service.description, leftMargin + 10, yPos + 24, { width: 220 });
+          }
+          
+          // Quantity
+          doc.font('Helvetica')
+             .fontSize(12)
+             .fill('#1e293b')
+             .text(invoiceService.quantity.toString(), leftMargin + 260, yPos + 15);
+          
+          // Unit price
+          doc.font('Helvetica')
+             .fontSize(12)
+             .fill('#1e293b')
+             .text(`€${invoiceService.unitPrice}`, leftMargin + 320, yPos + 15);
+          
+          // Line total
+          doc.font('Helvetica-Bold')
+             .fontSize(12)
+             .fill('#0ea5e9')
+             .text(`€${invoiceService.lineTotal}`, leftMargin + 400, yPos + 15);
+          
+          yPos += serviceHeight;
+        }
+        
+        // Total amount section
+        yPos += 10;
+        doc.rect(leftMargin, yPos, usableWidth, 40).fill('#f8fafc').stroke('#e2e8f0');
         
         doc.font('Helvetica-Bold')
            .fontSize(16)
-           .fill('#0ea5e9')
-           .text(amountText, amountX, amountY, { width: 60, align: 'right' });
-           
-        doc.font('Helvetica-Bold')
-           .fontSize(16)
-           .fill('#0ea5e9')
-           .text('€', amountX + 65, amountY);
+           .fill('#1e293b')
+           .text('Totali Përfundimtar:', leftMargin + 300, yPos + 12);
         
-        yPos += 80;
+        doc.font('Helvetica-Bold')
+           .fontSize(18)
+           .fill('#0ea5e9')
+           .text(`€${invoice.totalAmount}`, leftMargin + 440, yPos + 10);
+        
+        yPos += 40;
         
         // Footer - positioned at bottom of page
         const pageHeight = doc.page.height;
@@ -999,28 +1040,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Invoice not found' });
       }
 
-      // Get client and service details
+      // Get client details (services are already included in InvoiceWithServices)
       const client = await storage.getClient(invoice.clientId);
-      const service = await storage.getService(invoice.serviceId);
       
-      if (!client || !service) {
-        return res.status(404).json({ error: 'Client or service not found' });
+      if (!client) {
+        return res.status(404).json({ error: 'Client not found' });
       }
-
-      // Check if SendGrid API key is available
-      if (!process.env.SENDGRID_API_KEY) {
-        return res.status(500).json({ 
-          error: 'Email service not configured. SENDGRID_API_KEY is missing.' 
-        });
+      
+      if (invoice.services.length === 0) {
+        return res.status(400).json({ error: 'Invoice has no services' });
       }
 
       // Development mode fallback - simulate email sending without SendGrid
       if (isDevelopment) {
         console.log('📧 Development Mode: Simulating email send');
         console.log(`📧 To: ${client.email}`);
-        console.log(`📧 Subject: Fatura #${invoice.id.slice(-8).toUpperCase()} - ${service.name}`);
+        console.log(`📧 Subject: Fatura #${invoice.id.slice(-8).toUpperCase()} - ${invoice.services.length > 1 ? 'Shërbime të shumta' : invoice.services[0].service.name}`);
         console.log(`📧 Invoice ID: ${invoice.id}`);
-        console.log(`📧 Amount: ${invoice.amount}€`);
+        console.log(`📧 Amount: €${invoice.totalAmount}`);
         
         // Simulate a small delay to make it feel realistic
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -1034,19 +1071,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
+      // Check if SendGrid API key is available (only in production)
+      if (!process.env.SENDGRID_API_KEY) {
+        return res.status(500).json({ 
+          error: 'Email service not configured. SENDGRID_API_KEY is missing.' 
+        });
+      }
+
       try {
         // Dynamically import SendGrid only in production
         const sgMail = (await import('@sendgrid/mail')).default;
         sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
+        // Generate services list for email
+        const servicesList = invoice.services.map(invoiceService => 
+          `  - ${invoiceService.service.name} (Sasia: ${invoiceService.quantity}, Çmimi: €${invoiceService.unitPrice}, Totali: €${invoiceService.lineTotal})`
+        ).join('\n');
+        
         const emailContent = `
           Përshëndetje ${client.name},
 
-          Ju dërgojmë faturën tuaj për shërbimin: ${service.name}
+          Ju dërgojmë faturën tuaj për shërbimet e mëposhtme:
+          
+          Shërbimet:
+${servicesList}
           
           Detajet e faturës:
           - Numri i faturës: #${invoice.id.slice(-8).toUpperCase()}
-          - Shuma: ${invoice.amount}€
+          - Totali përfundimtar: €${invoice.totalAmount}
           - Data e lëshimit: ${new Date(invoice.issueDate).toLocaleDateString('sq-AL')}
           - Skadenca: ${new Date(invoice.dueDate).toLocaleDateString('sq-AL')}
           - Statusi: ${invoice.status === 'paid' ? 'Paguar' : invoice.status === 'pending' ? 'Në pritje' : 'Vonesa'}
@@ -1060,7 +1112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const msg = {
           to: client.email,
           from: 'noreply@replit.app', // Using replit.app domain which is more likely to work
-          subject: `Fatura #${invoice.id.slice(-8).toUpperCase()} - ${service.name}`,
+          subject: `Fatura #${invoice.id.slice(-8).toUpperCase()} - ${invoice.services.length > 1 ? 'Shërbime të shumta' : invoice.services[0].service.name}`,
           text: emailContent,
           html: emailContent.replace(/\n/g, '<br>')
         };
