@@ -15,11 +15,16 @@ interface ClientCardProps {
 }
 
 export function ClientCard({ client, onView }: ClientCardProps) {
-  const getOverallStatus = (): PaymentStatus => {
-    if (client.overdueCount > 0) return "overdue";
-    if (client.totalPending > 0) return "pending";
-    return "paid";
+  const getClientStatus = () => {
+    // Show client type and status instead of payment status
+    if (client.isCompany) {
+      return { type: "company", label: "Kompani" };
+    } else {
+      return { type: "individual", label: "Person" };
+    }
   };
+
+  const hasPaymentIssues = client.overdueCount > 0 || client.totalPending > 0;
 
   return (
     <Card className="hover-elevate" data-testid={`card-client-${client.id}`}>
@@ -34,7 +39,16 @@ export function ClientCard({ client, onView }: ClientCardProps) {
             {client.name}
           </h3>
         </div>
-        <StatusBadge status={getOverallStatus()} />
+        <div className="flex items-center gap-2">
+          <Badge variant={client.isCompany ? "default" : "secondary"}>
+            {getClientStatus().label}
+          </Badge>
+          {hasPaymentIssues && (
+            <Badge variant={client.overdueCount > 0 ? "destructive" : "outline"}>
+              {client.overdueCount > 0 ? "Vonesa" : "Në pritje"}
+            </Badge>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2 text-sm">
