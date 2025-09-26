@@ -8,7 +8,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import puppeteer from "puppeteer";
+import PDFDocument from "pdfkit";
 import { randomUUID } from "crypto";
 const pgSession = connectPgSimple(session);
 
@@ -52,8 +52,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
     standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-    // Configure trust proxy securely to prevent bypass
-    trustProxy: false, // Use req.ip from Express app trust proxy setting
+    // Configure validation to work with Express trust proxy setting
+    validate: {
+      trustProxy: false  // Disable validation since we handle proxy config in Express
+    },
     // Skip rate limiting for auth endpoints
     skip: (req) => {
       const authPaths = ['/api/auth/login', '/api/auth/logout'];
@@ -219,8 +221,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
     standardHeaders: true,
     legacyHeaders: false,
-    // Configure trust proxy securely to prevent bypass
-    trustProxy: false, // Use req.ip from Express app trust proxy setting
+    // Configure validation to work with Express trust proxy setting
+    validate: {
+      trustProxy: false  // Disable validation since we handle proxy config in Express
+    }
   });
 
   // Custom authentication routes
@@ -736,385 +740,214 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Base64 encoded NaN Studio logo
       const logoBase64 = "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...";
 
-      // Generate HTML content for PDF with embedded logo
-      // HTML escape function to prevent XSS attacks
-      const escapeHtml = (text: string | null | undefined): string => {
-        if (!text) return '';
-        return String(text)
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&#39;');
-      };
-
-      const htmlContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <title>Fatura ${escapeHtml(invoice.id)}</title>
-          <style>
-            * {
-              margin: 0;
-              padding: 0;
-              box-sizing: border-box;
-            }
-            
-            body { 
-              font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              line-height: 1.6;
-              color: #1f2937;
-              background: white;
-              padding: 40px;
-            }
-            
-            .invoice-container {
-              background: white;
-              border-radius: 16px;
-              overflow: hidden;
-              max-width: 800px;
-              margin: 0 auto;
-            }
-            
-            .invoice-header {
-              background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
-              color: white;
-              padding: 40px;
-              position: relative;
-            }
-            
-            .logo-section {
-              display: flex;
-              align-items: center;
-              gap: 20px;
-              margin-bottom: 30px;
-            }
-            
-            .logo-image {
-              width: 120px;
-              height: auto;
-              border-radius: 8px;
-              background: rgba(255, 255, 255, 0.1);
-              padding: 8px;
-            }
-            
-            .company-info h1 {
-              font-size: 28px;
-              font-weight: 700;
-              margin-bottom: 8px;
-            }
-            
-            .company-info p {
-              font-size: 16px;
-              opacity: 0.9;
-            }
-            
-            .invoice-meta {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 30px;
-              margin-top: 30px;
-            }
-            
-            .invoice-number {
-              font-size: 32px;
-              font-weight: 800;
-              margin-bottom: 10px;
-              color: #ffffff;
-            }
-            
-            .invoice-dates {
-              text-align: right;
-            }
-            
-            .date-item {
-              margin-bottom: 8px;
-            }
-            
-            .date-label {
-              font-size: 14px;
-              opacity: 0.8;
-              display: block;
-            }
-            
-            .date-value {
-              font-size: 16px;
-              font-weight: 600;
-            }
-            
-            .invoice-body {
-              padding: 40px;
-            }
-            
-            .billing-section {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 40px;
-              margin-bottom: 40px;
-              padding: 30px;
-              background: #f8fafc;
-              border-radius: 12px;
-              border: 1px solid #e2e8f0;
-            }
-            
-            .section-title {
-              font-size: 18px;
-              font-weight: 700;
-              color: #0f172a;
-              margin-bottom: 20px;
-              padding-bottom: 10px;
-              border-bottom: 2px solid #0ea5e9;
-            }
-            
-            .info-item {
-              display: flex;
-              margin-bottom: 12px;
-            }
-            
-            .info-label {
-              font-weight: 600;
-              color: #475569;
-              min-width: 120px;
-            }
-            
-            .info-value {
-              color: #1e293b;
-              flex: 1;
-            }
-            
-            .service-details {
-              background: white;
-              border: 1px solid #e2e8f0;
-              border-radius: 12px;
-              overflow: hidden;
-              margin-bottom: 40px;
-            }
-            
-            .service-header {
-              background: #0ea5e9;
-              color: white;
-              padding: 20px;
-              font-size: 18px;
-              font-weight: 700;
-            }
-            
-            .service-content {
-              padding: 30px;
-            }
-            
-            .service-item {
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              padding: 15px 0;
-              border-bottom: 1px solid #f1f5f9;
-            }
-            
-            .service-item:last-child {
-              border-bottom: none;
-            }
-            
-            .service-name {
-              font-size: 16px;
-              font-weight: 600;
-              color: #1e293b;
-            }
-            
-            .service-description {
-              font-size: 14px;
-              color: #64748b;
-              margin-top: 4px;
-            }
-            
-            .amount {
-              font-size: 24px;
-              font-weight: 800;
-              color: #0ea5e9;
-            }
-            
-            .status {
-              padding: 8px 16px;
-              border-radius: 20px;
-              font-size: 14px;
-              font-weight: 600;
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
-            }
-            
-            .status.paid {
-              background: #dcfce7;
-              color: #166534;
-            }
-            
-            .status.pending {
-              background: #fef3c7;
-              color: #92400e;
-            }
-            
-            .status.overdue {
-              background: #fee2e2;
-              color: #991b1b;
-            }
-            
-            .footer {
-              text-align: center;
-              padding: 30px;
-              background: #f8fafc;
-              border-top: 1px solid #e2e8f0;
-              margin-top: 40px;
-            }
-            
-            .footer-text {
-              color: #64748b;
-              font-size: 14px;
-              line-height: 1.5;
-            }
-            
-            .footer-logo {
-              margin-top: 20px;
-              font-weight: 600;
-              color: #0ea5e9;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="invoice-container">
-            <div class="invoice-header">
-              <div class="logo-section">
-                <img src="data:image/png;base64,${logoBase64}" alt="NaN Studio" class="logo-image" />
-                <div class="company-info">
-                  <h1>NaN Studio</h1>
-                  <p>Professional Technology Services</p>
-                </div>
-              </div>
-              
-              <div class="invoice-meta">
-                <div class="invoice-number-section">
-                  <div class="invoice-number">FATURA #${escapeHtml(invoice.id.slice(-8).toUpperCase())}</div>
-                </div>
-                <div class="invoice-dates">
-                  <div class="date-item">
-                    <span class="date-label">Data e lëshimit:</span>
-                    <span class="date-value">${new Date(invoice.issueDate).toLocaleDateString('sq-AL')}</span>
-                  </div>
-                  <div class="date-item">
-                    <span class="date-label">Skadenca:</span>
-                    <span class="date-value">${new Date(invoice.dueDate).toLocaleDateString('sq-AL')}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div class="invoice-body">
-              <div class="billing-section">
-                <div>
-                  <h3 class="section-title">Faturuar për:</h3>
-                  <div class="info-item">
-                    <span class="info-label">Klienti:</span>
-                    <span class="info-value">${escapeHtml(client.name)}</span>
-                  </div>
-                  <div class="info-item">
-                    <span class="info-label">Email:</span>
-                    <span class="info-value">${escapeHtml(client.email)}</span>
-                  </div>
-                  ${client.phone ? `
-                    <div class="info-item">
-                      <span class="info-label">Telefoni:</span>
-                      <span class="info-value">${escapeHtml(client.phone)}</span>
-                    </div>
-                  ` : ''}
-                  ${client.address ? `
-                    <div class="info-item">
-                      <span class="info-label">Adresa:</span>
-                      <span class="info-value">${escapeHtml(client.address)}</span>
-                    </div>
-                  ` : ''}
-                  ${client.taxId ? `
-                    <div class="info-item">
-                      <span class="info-label">Numri Fiskal:</span>
-                      <span class="info-value">${escapeHtml(client.taxId)}</span>
-                    </div>
-                  ` : ''}
-                </div>
-                
-                <div>
-                  <h3 class="section-title">Statusi i Pagesës:</h3>
-                  <div class="info-item">
-                    <span class="info-label">Statusi:</span>
-                    <span class="status ${invoice.status}">
-                      ${invoice.status === 'paid' ? 'Paguar' : invoice.status === 'pending' ? 'Në pritje' : 'Vonesa'}
-                    </span>
-                  </div>
-                  ${invoice.paidDate ? `
-                    <div class="info-item">
-                      <span class="info-label">Data e pagesës:</span>
-                      <span class="info-value">${new Date(invoice.paidDate).toLocaleDateString('sq-AL')}</span>
-                    </div>
-                  ` : ''}
-                </div>
-              </div>
-              
-              <div class="service-details">
-                <div class="service-header">Detajet e Shërbimit</div>
-                <div class="service-content">
-                  <div class="service-item">
-                    <div>
-                      <div class="service-name">${escapeHtml(service.name)}</div>
-                      <div class="service-description">${escapeHtml(service.description) || 'Shërbim profesional teknologjik'}</div>
-                    </div>
-                    <div class="amount">${escapeHtml(String(invoice.amount))}€</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div class="footer">
-              <div class="footer-text">
-                Ky dokument është gjeneruar automatikisht nga sistemi i menaxhimit të klientëve<br>
-                Faleminderit që zgjodhët shërbimet tona profesionale
-              </div>
-              <div class="footer-logo">NaN Studio - Professional Technology Services</div>
-            </div>
-          </div>
-        </body>
-        </html>
-      `;
-
-      // Try PDF generation with fallback to HTML
+      // Generate PDF using PDFKit (pure JavaScript, no dependencies)
       try {
-        // Generate PDF using Puppeteer with Replit-compatible settings
-        const browser = await puppeteer.launch({
-          headless: true,
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--disable-gpu',
-            '--disable-web-security',
-            '--disable-features=VizDisplayCompositor'
-          ],
-          executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
+        const doc = new PDFDocument({ margin: 50, size: 'A4' });
+        
+        // Create chunks array to collect PDF data
+        const chunks: Buffer[] = [];
+        
+        // Collect data chunks
+        doc.on('data', chunk => chunks.push(chunk));
+        
+        // Handle PDF completion
+        const pdfPromise = new Promise<Buffer>((resolve) => {
+          doc.on('end', () => {
+            const pdfBuffer = Buffer.concat(chunks);
+            resolve(pdfBuffer);
+          });
         });
+
+        // Page dimensions
+        const pageWidth = doc.page.width;
+        const leftMargin = 50;
+        const rightMargin = pageWidth - 50;
+        const usableWidth = rightMargin - leftMargin;
         
-        const page = await browser.newPage();
-        await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+        // Header with blue background
+        doc.rect(0, 0, pageWidth, 200).fill('#0ea5e9');
         
-        const pdfBuffer = await page.pdf({
-          format: 'A4',
-          printBackground: true,
-          margin: {
-            top: '0.5in',
-            right: '0.5in',
-            bottom: '0.5in',
-            left: '0.5in'
-          }
-        });
+        // Add logo placeholder (NaN Studio text instead of image)
+        doc.fill('#ffffff')
+           .font('Helvetica-Bold')
+           .fontSize(18)
+           .text('NaN Studio', leftMargin, 40)
+           .fontSize(12)
+           .text('LOGO', leftMargin, 65);
         
-        await browser.close();
+        // Company info
+        doc.fill('#ffffff')
+           .font('Helvetica-Bold')
+           .fontSize(24)
+           .text('NaN Studio', leftMargin + 100, 35);
+           
+        doc.font('Helvetica')
+           .fontSize(14)
+           .text('Professional Technology Services', leftMargin + 100, 65);
+        
+        // Invoice number and dates
+        doc.font('Helvetica-Bold')
+           .fontSize(32)
+           .text(`FATURA #${invoice.id.slice(-8).toUpperCase()}`, leftMargin, 110, { width: usableWidth / 2 });
+        
+        // Dates on the right
+        const rightX = leftMargin + usableWidth / 2;
+        doc.font('Helvetica')
+           .fontSize(12)
+           .text('Data e lëshimit:', rightX, 130)
+           .font('Helvetica-Bold')
+           .text(new Date(invoice.issueDate).toLocaleDateString('sq-AL'), rightX + 100, 130);
+           
+        doc.font('Helvetica')
+           .fontSize(12)
+           .text('Skadenca:', rightX, 150)
+           .font('Helvetica-Bold')
+           .text(new Date(invoice.dueDate).toLocaleDateString('sq-AL'), rightX + 100, 150);
+        
+        // Reset to black for body content
+        doc.fill('#000000');
+        
+        let yPos = 240;
+        
+        // Client Info Section
+        doc.rect(leftMargin, yPos, usableWidth, 150).fill('#f8fafc').stroke('#e2e8f0');
+        yPos += 20;
+        
+        // Client info
+        doc.font('Helvetica-Bold')
+           .fontSize(16)
+           .fill('#0f172a')
+           .text('Faturuar për:', leftMargin + 20, yPos);
+        yPos += 30;
+        
+        doc.font('Helvetica-Bold')
+           .fontSize(12)
+           .fill('#475569')
+           .text('Klienti:', leftMargin + 20, yPos, { width: 100, continued: true })
+           .font('Helvetica')
+           .fill('#1e293b')
+           .text(client.name);
+        yPos += 20;
+        
+        doc.font('Helvetica-Bold')
+           .fill('#475569')
+           .text('Email:', leftMargin + 20, yPos, { width: 100, continued: true })
+           .font('Helvetica')
+           .fill('#1e293b')
+           .text(client.email);
+        yPos += 20;
+        
+        if (client.phone) {
+          doc.font('Helvetica-Bold')
+             .fill('#475569')
+             .text('Telefoni:', leftMargin + 20, yPos, { width: 100, continued: true })
+             .font('Helvetica')
+             .fill('#1e293b')
+             .text(client.phone);
+          yPos += 20;
+        }
+        
+        if (client.address) {
+          doc.font('Helvetica-Bold')
+             .fill('#475569')
+             .text('Adresa:', leftMargin + 20, yPos, { width: 100, continued: true })
+             .font('Helvetica')
+             .fill('#1e293b')
+             .text(client.address, { width: usableWidth - 140 });
+          yPos += 20;
+        }
+        
+        // Payment Status (right side)
+        const statusX = leftMargin + usableWidth / 2 + 20;
+        let statusY = 260;
+        
+        doc.font('Helvetica-Bold')
+           .fontSize(16)
+           .fill('#0f172a')
+           .text('Statusi i Pagesës:', statusX, statusY);
+        statusY += 30;
+        
+        const statusText = invoice.status === 'paid' ? 'Paguar' : invoice.status === 'pending' ? 'Në pritje' : 'Vonesa';
+        const statusColor = invoice.status === 'paid' ? '#166534' : invoice.status === 'pending' ? '#92400e' : '#991b1b';
+        const statusBg = invoice.status === 'paid' ? '#dcfce7' : invoice.status === 'pending' ? '#fef3c7' : '#fee2e2';
+        
+        // Status badge
+        doc.rect(statusX, statusY, 100, 25).fill(statusBg);
+        doc.font('Helvetica-Bold')
+           .fontSize(10)
+           .fill(statusColor)
+           .text(statusText.toUpperCase(), statusX + 10, statusY + 8);
+        
+        if (invoice.paidDate) {
+          statusY += 40;
+          doc.font('Helvetica-Bold')
+             .fontSize(12)
+             .fill('#475569')
+             .text('Data e pagesës:', statusX, statusY, { width: 100, continued: true })
+             .font('Helvetica')
+             .fill('#1e293b')
+             .text(new Date(invoice.paidDate).toLocaleDateString('sq-AL'));
+        }
+        
+        yPos = 420;
+        
+        // Service Details Section
+        doc.rect(leftMargin, yPos, usableWidth, 30).fill('#0ea5e9');
+        doc.font('Helvetica-Bold')
+           .fontSize(16)
+           .fill('#ffffff')
+           .text('Detajet e Shërbimit', leftMargin + 20, yPos + 8);
+        
+        yPos += 30;
+        doc.rect(leftMargin, yPos, usableWidth, 80).fill('#ffffff').stroke('#e2e8f0');
+        yPos += 20;
+        
+        // Service item
+        doc.font('Helvetica-Bold')
+           .fontSize(14)
+           .fill('#1e293b')
+           .text(service.name, leftMargin + 20, yPos, { width: usableWidth - 120 });
+        yPos += 20;
+        
+        doc.font('Helvetica')
+           .fontSize(12)
+           .fill('#64748b')
+           .text(service.description || 'Shërbim profesional teknologjik', leftMargin + 20, yPos, { width: usableWidth - 120 });
+        
+        // Amount (right side)
+        doc.font('Helvetica-Bold')
+           .fontSize(24)
+           .fill('#0ea5e9')
+           .text(`${invoice.amount}€`, rightMargin - 100, yPos - 20, { width: 80, align: 'right' });
+        
+        yPos += 80;
+        
+        // Footer
+        doc.rect(0, yPos, pageWidth, 100).fill('#f8fafc').stroke('#e2e8f0');
+        yPos += 20;
+        
+        doc.font('Helvetica')
+           .fontSize(12)
+           .fill('#64748b')
+           .text('Ky dokument është gjeneruar automatikisht nga sistemi i menaxhimit të klientëve', 
+                 leftMargin, yPos, { width: usableWidth, align: 'center' });
+        yPos += 20;
+        
+        doc.text('Faleminderit që zgjodhët shërbimet tona profesionale', 
+                 leftMargin, yPos, { width: usableWidth, align: 'center' });
+        yPos += 30;
+        
+        doc.font('Helvetica-Bold')
+           .fontSize(14)
+           .fill('#0ea5e9')
+           .text('NaN Studio - Professional Technology Services', 
+                 leftMargin, yPos, { width: usableWidth, align: 'center' });
+        
+        // Finalize the PDF
+        doc.end();
+        
+        // Wait for PDF generation to complete
+        const pdfBuffer = await pdfPromise;
 
         // Set headers for PDF download
         res.setHeader('Content-Type', 'application/pdf');
@@ -1125,94 +958,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.send(pdfBuffer);
         
       } catch (pdfError) {
-        console.log('PDF generation failed, falling back to printable HTML:', pdfError instanceof Error ? pdfError.message : String(pdfError));
-        
-        // Fallback: Return enhanced HTML with print functionality
-        const printableHtml = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="utf-8">
-            <title>Fatura ${invoice.id}</title>
-            <style>
-              ${htmlContent.split('<style>')[1].split('</style>')[0]}
-              
-              .print-actions { 
-                margin-bottom: 30px;
-                text-align: center;
-                background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-                padding: 20px;
-                border-radius: 12px;
-                box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
-              }
-              
-              .print-actions button { 
-                background: white;
-                color: #1d4ed8;
-                border: none;
-                padding: 14px 28px;
-                border-radius: 8px;
-                margin: 0 10px;
-                cursor: pointer;
-                font-size: 16px;
-                font-weight: 600;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                transition: all 0.2s ease;
-              }
-              
-              .print-actions button:hover { 
-                transform: translateY(-2px);
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-              }
-              
-              .print-actions button.secondary { 
-                background: transparent;
-                color: white;
-                border: 2px solid white;
-              }
-              
-              .print-actions button.secondary:hover { 
-                background: white;
-                color: #1d4ed8;
-              }
-              
-              @media print {
-                .print-actions { display: none !important; }
-                body { padding: 20px; }
-                .invoice-container { box-shadow: none; }
-              }
-            </style>
-          </head>
-          <body>
-            <div class="print-actions">
-              <button data-action="print">📄 Printo si PDF</button>
-              <button data-action="close" class="secondary">❌ Mbyll</button>
-              <div style="margin-top: 10px; color: white; font-size: 14px; opacity: 0.8;">
-                Sistemi po punon në modalitetin HTML. Përdorni "Printo si PDF" për të ruajtur si PDF.
-              </div>
-            </div>
-            
-            ${htmlContent.split('<body>')[1].split('</body>')[0]}
-            
-            <script nonce="${randomUUID()}">
-              document.addEventListener('click', function(e) {
-                if (e.target.matches('[data-action="print"]')) {
-                  window.print();
-                  e.preventDefault();
-                } else if (e.target.matches('[data-action="close"]')) {
-                  window.close();
-                  e.preventDefault();
-                }
-              });
-            </script>
-          </body>
-          </html>
-        `;
-        
-        // Return HTML with print functionality
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.setHeader('Content-Disposition', `inline; filename="fatura-${invoice.id.slice(-8)}.html"`);
-        res.send(printableHtml);
+        console.error('PDF generation failed:', pdfError instanceof Error ? pdfError.message : String(pdfError));
+        res.status(500).json({ 
+          error: 'Failed to generate PDF',
+          details: process.env.NODE_ENV === 'development' && pdfError instanceof Error ? pdfError.message : undefined
+        });
       }
       
     } catch (error) {
