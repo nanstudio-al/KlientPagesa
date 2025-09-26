@@ -1,15 +1,361 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { insertClientSchema, insertServiceSchema, insertInvoiceSchema } from "@shared/schema";
+import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // put application routes here
-  // prefix all routes with /api
+  // Client routes
+  app.get("/api/clients", async (req, res) => {
+    try {
+      const clients = await storage.getAllClients();
+      
+      // Enrich with additional data for the frontend
+      const enrichedClients = await Promise.all(
+        clients.map(async (client) => {
+          const clientServices = await storage.getClientServices(client.id);
+          const invoices = await storage.getInvoicesByClient(client.id);
+          
+          const services = await Promise.all(
+            clientServices.map(cs => storage.getService(cs.serviceId))
+          );
+          
+          const totalPending = invoices
+            .filter(inv => inv.status === 'pending')
+            .reduce((sum, inv) => sum + parseFloat(inv.amount), 0);
+          
+          const overdueCount = invoices.filter(inv => {
+            return new Date(inv.dueDate) < new Date() && inv.status !== 'paid';
+          }).length;
+          
+          return {
+            ...client,
+            services: services.filter(Boolean).map(s => s!.name),
+            totalPending,
+            overdueCount
+          };
+        })
+      );
+      
+      res.json(enrichedClients);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch clients' });
+    }
+  });
 
-  // use storage to perform CRUD operations on the storage interface
-  // e.g. storage.insertUser(user) or storage.getUserByUsername(username)
+  app.post("/api/clients", async (req, res) => {
+    try {
+      const validatedData = insertClientSchema.parse(req.body);
+      const client = await storage.createClient(validatedData);
+      res.status(201).json(client);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Validation failed', details: error.errors });
+      } else {
+        res.status(500).json({ error: 'Failed to create client' });
+      }
+    }
+  });
+
+  app.get("/api/clients/:id", async (req, res) => {
+    try {
+      const client = await storage.getClient(req.params.id);
+      if (!client) {
+        return res.status(404).json({ error: 'Client not found' });
+      }
+      res.json(client);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch client' });
+    }
+  });
+
+  app.put("/api/clients/:id", async (req, res) => {
+    try {
+      const validatedData = insertClientSchema.partial().parse(req.body);
+      const client = await storage.updateClient(req.params.id, validatedData);
+      if (!client) {
+        return res.status(404).json({ error: 'Client not found' });
+      }
+      res.json(client);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Validation failed', details: error.errors });
+      } else {
+        res.status(500).json({ error: 'Failed to update client' });
+      }
+    }
+  });
+
+  app.delete("/api/clients/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteClient(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: 'Client not found' });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to delete client' });
+    }
+  });
+
+  // Service routes
+  app.get("/api/services", async (req, res) => {
+    try {
+      const services = await storage.getAllServices();
+      res.json(services);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch services' });
+    }
+  });
+
+  app.post("/api/services", async (req, res) => {
+    try {
+      const validatedData = insertServiceSchema.parse(req.body);
+      const service = await storage.createService(validatedData);
+      res.status(201).json(service);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Validation failed', details: error.errors });
+      } else {
+        res.status(500).json({ error: 'Failed to create service' });
+      }
+    }
+  });
+
+  app.get("/api/services/:id", async (req, res) => {
+    try {
+      const service = await storage.getService(req.params.id);
+      if (!service) {
+        return res.status(404).json({ error: 'Service not found' });
+      }
+      res.json(service);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch service' });
+    }
+  });
+
+  app.put("/api/services/:id", async (req, res) => {
+    try {
+      const validatedData = insertServiceSchema.partial().parse(req.body);
+      const service = await storage.updateService(req.params.id, validatedData);
+      if (!service) {
+        return res.status(404).json({ error: 'Service not found' });
+      }
+      res.json(service);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Validation failed', details: error.errors });
+      } else {
+        res.status(500).json({ error: 'Failed to update service' });
+      }
+    }
+  });
+
+  app.delete("/api/services/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteService(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: 'Service not found' });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to delete service' });
+    }
+  });
+
+  // Invoice routes
+  app.get("/api/invoices", async (req, res) => {
+    try {
+      const invoices = await storage.getAllInvoices();
+      
+      // Enrich with client and service names
+      const enrichedInvoices = await Promise.all(
+        invoices.map(async (invoice) => {
+          const client = await storage.getClient(invoice.clientId);
+          const service = await storage.getService(invoice.serviceId);
+          
+          return {
+            ...invoice,
+            clientName: client?.name || 'Unknown Client',
+            serviceName: service?.name || 'Unknown Service'
+          };
+        })
+      );
+      
+      res.json(enrichedInvoices);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch invoices' });
+    }
+  });
+
+  app.post("/api/invoices", async (req, res) => {
+    try {
+      const validatedData = insertInvoiceSchema.parse(req.body);
+      const invoice = await storage.createInvoice(validatedData);
+      res.status(201).json(invoice);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Validation failed', details: error.errors });
+      } else {
+        res.status(500).json({ error: 'Failed to create invoice' });
+      }
+    }
+  });
+
+  app.get("/api/invoices/:id", async (req, res) => {
+    try {
+      const invoice = await storage.getInvoice(req.params.id);
+      if (!invoice) {
+        return res.status(404).json({ error: 'Invoice not found' });
+      }
+      res.json(invoice);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch invoice' });
+    }
+  });
+
+  app.patch("/api/invoices/:id/status", async (req, res) => {
+    try {
+      const { status, paidDate } = req.body;
+      const invoice = await storage.updateInvoiceStatus(
+        req.params.id, 
+        status, 
+        paidDate ? new Date(paidDate) : undefined
+      );
+      if (!invoice) {
+        return res.status(404).json({ error: 'Invoice not found' });
+      }
+      res.json(invoice);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to update invoice status' });
+    }
+  });
+
+  // Dashboard analytics routes
+  app.get("/api/dashboard/stats", async (req, res) => {
+    try {
+      const clients = await storage.getAllClients();
+      const services = await storage.getAllServices();
+      const invoices = await storage.getAllInvoices();
+      const overdueInvoices = await storage.getOverdueInvoices();
+      
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+      
+      const monthlyRevenue = invoices
+        .filter(inv => {
+          const invoiceDate = new Date(inv.issueDate);
+          return invoiceDate.getMonth() === currentMonth && 
+                 invoiceDate.getFullYear() === currentYear &&
+                 inv.status === 'paid';
+        })
+        .reduce((sum, inv) => sum + parseFloat(inv.amount), 0);
+      
+      const pendingAmount = invoices
+        .filter(inv => inv.status === 'pending')
+        .reduce((sum, inv) => sum + parseFloat(inv.amount), 0);
+      
+      const stats = {
+        totalClients: clients.length,
+        activeServices: services.length,
+        pendingInvoices: invoices.filter(inv => inv.status === 'pending').length,
+        overdueInvoices: overdueInvoices.length,
+        monthlyRevenue: Math.round(monthlyRevenue),
+        pendingAmount: Math.round(pendingAmount)
+      };
+      
+      res.json(stats);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch dashboard stats' });
+    }
+  });
+
+  app.get("/api/dashboard/recent-invoices", async (req, res) => {
+    try {
+      const invoices = await storage.getAllInvoices();
+      const recentInvoices = invoices
+        .sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime())
+        .slice(0, 5);
+      
+      const enrichedInvoices = await Promise.all(
+        recentInvoices.map(async (invoice) => {
+          const client = await storage.getClient(invoice.clientId);
+          const service = await storage.getService(invoice.serviceId);
+          
+          return {
+            id: invoice.id,
+            clientName: client?.name || 'Unknown',
+            serviceName: service?.name || 'Unknown',
+            amount: invoice.amount,
+            dueDate: invoice.dueDate,
+            status: invoice.status
+          };
+        })
+      );
+      
+      res.json(enrichedInvoices);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch recent invoices' });
+    }
+  });
+
+  app.get("/api/dashboard/upcoming-payments", async (req, res) => {
+    try {
+      const upcomingInvoices = await storage.getUpcomingInvoices(30);
+      
+      const enrichedInvoices = await Promise.all(
+        upcomingInvoices.map(async (invoice) => {
+          const client = await storage.getClient(invoice.clientId);
+          const service = await storage.getService(invoice.serviceId);
+          
+          return {
+            id: invoice.id,
+            clientName: client?.name || 'Unknown',
+            serviceName: service?.name || 'Unknown',
+            amount: invoice.amount,
+            dueDate: invoice.dueDate
+          };
+        })
+      );
+      
+      res.json(enrichedInvoices);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch upcoming payments' });
+    }
+  });
+
+  // Client-Service assignment routes
+  app.post("/api/clients/:clientId/services", async (req, res) => {
+    try {
+      const { serviceId, startDate } = req.body;
+      const assignment = await storage.assignServiceToClient({
+        clientId: req.params.clientId,
+        serviceId,
+        startDate: startDate ? new Date(startDate) : undefined,
+        isActive: 1
+      });
+      res.status(201).json(assignment);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to assign service to client' });
+    }
+  });
+
+  app.delete("/api/clients/:clientId/services/:serviceId", async (req, res) => {
+    try {
+      const success = await storage.removeServiceFromClient(
+        req.params.clientId, 
+        req.params.serviceId
+      );
+      if (!success) {
+        return res.status(404).json({ error: 'Assignment not found' });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to remove service from client' });
+    }
+  });
 
   const httpServer = createServer(app);
-
   return httpServer;
 }
