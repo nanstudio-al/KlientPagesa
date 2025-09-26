@@ -40,17 +40,30 @@ export const paymentStatusEnum = pgEnum("payment_status", ["paid", "pending", "o
 // User role enum
 export const roleEnum = pgEnum("role", ["admin", "user"]);
 
-// Invoices table
+// Invoices table - dual structure during migration (old + new fields)
 export const invoices = pgTable("invoices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   invoiceNumber: integer("invoice_number").unique(),
   clientId: varchar("client_id").notNull().references(() => clients.id),
+  // Legacy fields (preserved for backward compatibility during migration)
   serviceId: varchar("service_id").notNull().references(() => services.id),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  // New field for multiple services support
+  totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
   issueDate: timestamp("issue_date").default(sql`now()`).notNull(),
   dueDate: timestamp("due_date").notNull(),
   status: paymentStatusEnum("status").default("pending").notNull(),
   paidDate: timestamp("paid_date"),
+});
+
+// Invoice Services junction table (many-to-many)
+export const invoiceServices = pgTable("invoice_services", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceId: varchar("invoice_id").notNull().references(() => invoices.id, { onDelete: "cascade" }),
+  serviceId: varchar("service_id").notNull().references(() => services.id),
+  quantity: integer("quantity").default(1).notNull(),
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
+  lineTotal: decimal("line_total", { precision: 10, scale: 2 }).notNull(), // quantity * unitPrice
 });
 
 // Zod schemas
@@ -68,12 +81,27 @@ export const insertClientServiceSchema = createInsertSchema(clientServices).omit
   id: true,
 });
 
+export const insertInvoiceServiceSchema = createInsertSchema(invoiceServices).omit({
+  id: true,
+  invoiceId: true,
+  lineTotal: true, // calculated field
+});
+
 export const insertInvoiceSchema = createInsertSchema(invoices).omit({
   id: true,
   invoiceNumber: true,
   issueDate: true,
+  // Omit calculated/auto-populated fields during dual-write phase
+  serviceId: true, // Will be set to first service for backward compatibility
+  amount: true, // Will be set to totalAmount for backward compatibility  
+  totalAmount: true, // calculated from services
 }).extend({
   dueDate: z.coerce.date(),
+  services: z.array(z.object({
+    serviceId: z.string(),
+    quantity: z.number().min(1).default(1),
+    unitPrice: z.string().optional(), // Will use service price if not provided
+  })).min(1, "At least one service is required"),
 });
 
 // Session storage table.
@@ -147,4 +175,11 @@ export type ClientService = typeof clientServices.$inferSelect;
 export type InsertClientService = z.infer<typeof insertClientServiceSchema>;
 export type Invoice = typeof invoices.$inferSelect;
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+export type InvoiceService = typeof invoiceServices.$inferSelect;
+export type InsertInvoiceService = z.infer<typeof insertInvoiceServiceSchema>;
 export type PaymentStatus = "paid" | "pending" | "overdue";
+
+// Extended types for invoice with services
+export type InvoiceWithServices = Invoice & {
+  services: (InvoiceService & { service: Service })[];
+};

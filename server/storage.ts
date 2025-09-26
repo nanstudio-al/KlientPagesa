@@ -5,6 +5,9 @@ import {
   type InsertService,
   type Invoice,
   type InsertInvoice,
+  type InvoiceService,
+  type InsertInvoiceService,
+  type InvoiceWithServices,
   type ClientService,
   type InsertClientService,
   type PaymentStatus,
@@ -18,6 +21,7 @@ import {
   services,
   clientServices,
   invoices,
+  invoiceServices,
   users
 } from "@shared/schema";
 import { randomUUID } from "crypto";
@@ -60,14 +64,17 @@ export interface IStorage {
   assignServiceToClient(assignment: InsertClientService): Promise<ClientService>;
   removeServiceFromClient(clientId: string, serviceId: string): Promise<boolean>;
   
-  // Invoice operations
-  getInvoice(id: string): Promise<Invoice | undefined>;
-  getAllInvoices(): Promise<Invoice[]>;
-  getInvoicesByClient(clientId: string): Promise<Invoice[]>;
-  createInvoice(invoice: InsertInvoice): Promise<Invoice>;
+  // Invoice operations - updated for multiple services support
+  getInvoice(id: string): Promise<InvoiceWithServices | undefined>;
+  getAllInvoices(): Promise<InvoiceWithServices[]>;
+  getInvoicesByClient(clientId: string): Promise<InvoiceWithServices[]>;
+  createInvoice(invoice: InsertInvoice): Promise<InvoiceWithServices>;
   updateInvoiceStatus(id: string, status: PaymentStatus, paidDate?: Date): Promise<Invoice | undefined>;
-  getOverdueInvoices(): Promise<Invoice[]>;
-  getUpcomingInvoices(days: number): Promise<Invoice[]>;
+  getOverdueInvoices(): Promise<InvoiceWithServices[]>;
+  getUpcomingInvoices(days: number): Promise<InvoiceWithServices[]>;
+  
+  // Invoice services operations
+  getInvoiceServices(invoiceId: string): Promise<(InvoiceService & { service: Service })[]>;
 }
 
 export class MemStorage implements IStorage {
