@@ -9,6 +9,7 @@ import rateLimit from "express-rate-limit";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import puppeteer from "puppeteer";
+import { randomUUID } from "crypto";
 const pgSession = connectPgSimple(session);
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -1184,8 +1185,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           </head>
           <body>
             <div class="print-actions">
-              <button id="print-btn">📄 Printo si PDF</button>
-              <button id="close-btn" class="secondary">❌ Mbyll</button>
+              <button data-action="print">📄 Printo si PDF</button>
+              <button data-action="close" class="secondary">❌ Mbyll</button>
               <div style="margin-top: 10px; color: white; font-size: 14px; opacity: 0.8;">
                 Sistemi po punon në modalitetin HTML. Përdorni "Printo si PDF" për të ruajtur si PDF.
               </div>
@@ -1193,17 +1194,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             ${htmlContent.split('<body>')[1].split('</body>')[0]}
             
-            <script>
-              window.addEventListener('load', function() {
-                console.log('Fatura e ngarkuar në modalitetin HTML. Klikoni "Printo si PDF" për të ruajtur si PDF.');
-                
-                document.getElementById('print-btn').addEventListener('click', function() {
+            <script nonce="${randomUUID()}">
+              document.addEventListener('click', function(e) {
+                if (e.target.matches('[data-action="print"]')) {
                   window.print();
-                });
-                
-                document.getElementById('close-btn').addEventListener('click', function() {
+                  e.preventDefault();
+                } else if (e.target.matches('[data-action="close"]')) {
                   window.close();
-                });
+                  e.preventDefault();
+                }
               });
             </script>
           </body>
