@@ -769,22 +769,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Add NaN Studio logo image
         const logoBase64 = "iVBORw0KGgoAAAANSUhEUgAAA+sAAAOMCAYAAAA18SKrAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAP+lSURBVHhe7N11mBz14cfx98z67rnk4i5H3EkCwSJIcAiSQIsUWlpKoTgtBYoVfrRIS4G2WPHirkESICQQJyGBOPGc+97uzvz+2JPdPcnFYBM+r+eZBzK2M7N7u/OZrxm2bduIiIiIiIiISNIwE2eIiIiIiIiIyI/LWPf9OpWsi4iIiIiIiCQR4+CDD1ZYFxEREREREUkiqgYvIiIiIiIikmQU1kVERERERESSjMK6iIiIiIiISJJRWBcRERERERFJMgrrIiIiIiIiIklGYV1EREREREQkySisi4iIiIiIiCQZhXURERERERGRJKOwLiIiIiIiIpJkFNZFREREREREkozCuoiIiIiIiEiSUVgXERERERERSTIK6yIiIiIiIiJJRmFdREREREREJMkorIuIiIiIiIgkGYV1ERERERERkSSjsC4iIiIiIiKSZIyDDz7YTpwpkizWr1+fOGuP6tq1a+Ksfcq4ceP4/PPPE2cnlb39Hu5pyf6Z2Bfe833dvniN98VjFhERkdapZF1EREREREQkySisi4gIAMcffzz/+9//ePPNN1udXnjhBY477rjEzfeaadOmcc455yTOFhEREdmvKayLiAgAv/zlL1m9ejVPP/10q9PKlSv51a9+lbj5XnHyySczffp0UlJSEhcltZNPPpnHHnuM66+/Hq/Xm7hYREREZIcU1kVEpMHixYt56qmnWp0WL16cuNlecfrpp3P++ecDkJqaymmnncbQoUMTV0s6V199NWeddRbLli1jzJgxHHrooYmriIiIiOyQwrqIyF5y++23c/vttyfO3qeceeaZnHnmmYmzfxBOp7Ph//v06cPPf/5zbr31Vm6++WaysrLi1k0mb7/9NjfddBMPPfQQJJzHvsAwDIYOHUpubm7ioh9Nbm4uQ4cOxTCMxEUiIiL7LYV12W+c9+xi1q1bzLPnJS7ZRVPv46237mNq4vyWTL2Pt2bN4q372ryF1LtrBuvWrWsyLa5/M897lsVxy2Le55hlDes3zJ/BXY1zZCedfPLJnHXWWZx11lmcfPLJiYv3ihEjRjBs2DAAnnrqKZ599lkAvvrqK8466yweffRRDjjgAB544AE6dOiQsHVyWLx4MYsWLWq4ZrNnz05cJWkZhsGwYcPIycnBNJPnFsE0TXJychg2bJgCu4iI/GQkzy+xyC67ixnr1nEpy1iZuGg3TB3fG1bO4vnEBc249slZzDoXVq5LXCJtcsUEunXr1jjdNJtSVvLeGY80rlM6m5sa1hlMdNF5PHtpf5bd1I1u3W5iWf9LG0L8XdP7s+ymCVzRuAdpg/oglJ2djc/na2in7vP5yM7OjltnTxsxYgR//vOf+dOf/tRQ3f2JJ57g6aefpqqqiuLiYl544QXOP/98qqurueKK5H13e/Xqxamnnsrbb79NUVFRw/xzzjmHJ554gscee4yTTjopbpsfW31Qz8rKYunSpWzdujVxlR/N1q1bWbp0KVlZWQrsIiLyk6GwLvuBK5jQrRuDz9iQuGA3XMsJw4qYdUlbojrcftZ4xh9zCZsTF8guuWv6WLY/HxO0++eSvn0DMdG9fgG5LOO9RwAeYcP2utl3zWDy9nvqAr3sDNu2ASgsLGzSVr2wsDBunT1p+PDh/PnPf2bz5s0UFhZy6623NgT2p556iscee6xh3dLSUu6++27y8/M55ZRTYvaSPH7zm99QUlLCo48+CkB6ejp/+9vfmDp1KkuWLGHr1q384he/YOLEiYmb/mgGDx5MdnY2hmEwcOBAJk2aFDcdeuihDBkyBLfbnbjpHuN2uxk6dCiHHnpok9cfOHAghmGQnZ3N4MGDEzcVERHZ7yisizTn2gF0W7eUfbu1cevy8vIa2lTvaGrXrl3i5nvPec8yOXc2TyUWmvae2lANfkZD3fZlbKc/k88DOI/OudvZ8MhdzJi8nXt+hKT+l7/8JW7q2bMnPXv2bDJf4g0ePJibb76ZjRs3ctVVV3HVVVexceNGbr311hZD2aJFi1izZg2TJk1KXPSjGzduHP369ePRRx+lsrISt9vNLbfcQvv27fn973/PnXfeydVXX83q1as59thjEzf/0WzYsAHbtrFtm/Xr17Nq1aq4qaCggOzsbMaMGbNXArvb7WbMmDFkZWVRUFDQ5PXXr1+PbdtEIhE2bNiQuKWIiMj+R2FdpImpi8HZzJi8nXt+BK99999//3tc9p155pkcdNBBvPfee/zqV7/irrvuIjs7O276yU9+wsSJE3nppZcYOHAgl19+Oe3ateOGG26A/rAPOI888siErf/BJk2axPPPP89jjz3G3Llz+fGPf8wVV1xBkyZP5x//8BddddVVjBgxgiuvvJJrr72Wtm3b8uijj9KuXTsuvfRS3nnnHc444wx69erF7NmzefXVV3nggQc466yzGDlyJGPHjuWFF17gzDPP5K9//SsPPfQQv//977njjjsaNHwwgwYN5uGHH2bDhg1cccUVXH755WzcuJEPDYrz589n7NixXHDhRQ2h7KOPPmLy5Ml0796dOXPmJO76wzJu3Dj69evHo48+SlVVFW63m1tuuYX27dvz+9//njvvvJOrr76a1atXc+yxxyZu+6PZsGEDtm1j2zbr169n1apVcVNBQQFZWVmMGTNmrwR2t9vNmDFjyMrKoqCgoMnrr1+/Htu2iUQiOzZP/r+wOYf2DMZMHCQ=";
-        // Add logo image to PDF directly from file
+        // Set text color to white for header content
+        doc.fill('#ffffff');
+        
+        // Add NaN Studio logo image (properly sized)
         try {
-          // Simple file path without require/import
-          const logoPath = './attached_assets/image_1758908858457.png';
-          
-          // Debug: Log the path attempt
+          const logoPath = './attached_assets/NaN-Logotype-05-300x169 (2)_1758911567490.png';
           console.log('Attempting to load logo from:', logoPath);
           
-          // Try to embed the logo directly
-          doc.image(logoPath, leftMargin, 30, { width: 120, height: 90 });
+          // Properly sized logo - not too big
+          doc.image(logoPath, leftMargin, 30, { width: 100, height: 56 });
           console.log('Logo loaded successfully');
         } catch (error) {
-          // Fallback to text if image fails to load
-          console.log('Logo loading failed:', error.message);
-          doc.fill('#ffffff')
-             .font('Helvetica-Bold')
+          console.log('Logo loading failed:', error instanceof Error ? error.message : String(error));
+          doc.font('Helvetica-Bold')
              .fontSize(18)
              .text('NaN Studio', leftMargin, 40);
         }
@@ -827,40 +825,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
            .text('Faturuar për:', leftMargin + 20, yPos);
         yPos += 30;
         
+        // Client info with proper positioning to avoid overlaps
         doc.font('Helvetica-Bold')
            .fontSize(12)
            .fill('#475569')
-           .text('Klienti:', leftMargin + 20, yPos, { width: 100, continued: true })
-           .font('Helvetica')
+           .text('Klienti:', leftMargin + 20, yPos);
+        doc.font('Helvetica')
            .fill('#1e293b')
-           .text(client.name);
+           .text(client.name, leftMargin + 120, yPos);
         yPos += 20;
         
         doc.font('Helvetica-Bold')
            .fill('#475569')
-           .text('Email:', leftMargin + 20, yPos, { width: 100, continued: true })
-           .font('Helvetica')
+           .text('Email:', leftMargin + 20, yPos);
+        doc.font('Helvetica')
            .fill('#1e293b')
-           .text(client.email);
+           .text(client.email, leftMargin + 120, yPos);
         yPos += 20;
         
         if (client.phone) {
           doc.font('Helvetica-Bold')
              .fill('#475569')
-             .text('Telefoni:', leftMargin + 20, yPos, { width: 100, continued: true })
-             .font('Helvetica')
+             .text('Telefoni:', leftMargin + 20, yPos);
+          doc.font('Helvetica')
              .fill('#1e293b')
-             .text(client.phone);
+             .text(client.phone, leftMargin + 120, yPos);
           yPos += 20;
         }
         
         if (client.address) {
           doc.font('Helvetica-Bold')
              .fill('#475569')
-             .text('Adresa:', leftMargin + 20, yPos, { width: 100, continued: true })
-             .font('Helvetica')
+             .text('Adresa:', leftMargin + 20, yPos);
+          doc.font('Helvetica')
              .fill('#1e293b')
-             .text(client.address, { width: usableWidth - 140 });
+             .text(client.address, leftMargin + 120, yPos, { width: usableWidth - 140 });
           yPos += 20;
         }
         
@@ -890,10 +889,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           doc.font('Helvetica-Bold')
              .fontSize(12)
              .fill('#475569')
-             .text('Data e pagesës:', statusX, statusY, { width: 100, continued: true })
-             .font('Helvetica')
+             .text('Data e pagesës:', statusX, statusY);
+          doc.font('Helvetica')
              .fill('#1e293b')
-             .text(new Date(invoice.paidDate).toLocaleDateString('sq-AL'));
+             .text(new Date(invoice.paidDate).toLocaleDateString('sq-AL'), statusX + 100, statusY);
         }
         
         yPos = 420;
