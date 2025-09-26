@@ -705,7 +705,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Client or service not found' });
       }
 
-      // Generate simple PDF-like HTML content
+      // Generate HTML content for PDF
       const htmlContent = `
         <!DOCTYPE html>
         <html>
@@ -761,9 +761,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         </html>
       `;
 
-      res.setHeader('Content-Type', 'text/html');
-      res.setHeader('Content-Disposition', `attachment; filename="fatura-${invoice.id.slice(-8)}.html"`);
-      res.send(htmlContent);
+      // Generate PDF using Puppeteer
+      const puppeteer = require('puppeteer');
+      const browser = await puppeteer.launch({
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+      });
+      const page = await browser.newPage();
+      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: {
+          top: '20mm',
+          right: '20mm',
+          bottom: '20mm',
+          left: '20mm'
+        }
+      });
+      await browser.close();
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="fatura-${invoice.id.slice(-8)}.pdf"`);
+      res.send(pdfBuffer);
     } catch (error) {
       console.error('Download invoice error:', error);
       res.status(500).json({ error: 'Failed to generate invoice document' });

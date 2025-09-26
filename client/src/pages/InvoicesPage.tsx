@@ -21,6 +21,16 @@ import {
 } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import type { InsertInvoice } from "@shared/schema";
 import { format } from "date-fns";
@@ -32,6 +42,7 @@ export default function InvoicesPage() {
   const [dateFilter, setDateFilter] = useState<{from?: Date; to?: Date}>({});
   const [currentPage, setCurrentPage] = useState(1);
   const [isInvoiceFormOpen, setIsInvoiceFormOpen] = useState(false);
+  const [emailConfirmDialog, setEmailConfirmDialog] = useState<{open: boolean; invoiceId?: string; clientEmail?: string}>({open: false});
   const itemsPerPage = 10;
   const { toast } = useToast();
 
@@ -148,7 +159,22 @@ export default function InvoicesPage() {
   });
 
   const handleSendEmail = (invoiceId: string) => {
-    sendEmailMutation.mutate(invoiceId);
+    // Find the invoice to get client email
+    const invoice = (invoices as any[]).find((inv: any) => inv.id === invoiceId);
+    const clientEmail = invoice?.clientEmail || "klienti";
+    
+    setEmailConfirmDialog({
+      open: true,
+      invoiceId,
+      clientEmail
+    });
+  };
+
+  const confirmSendEmail = () => {
+    if (emailConfirmDialog.invoiceId) {
+      sendEmailMutation.mutate(emailConfirmDialog.invoiceId);
+      setEmailConfirmDialog({open: false});
+    }
   };
 
   const handleDownload = (invoiceId: string) => {
@@ -353,6 +379,27 @@ export default function InvoicesPage() {
         onOpenChange={setIsInvoiceFormOpen}
         onSubmit={handleInvoiceSubmit}
       />
+
+      <AlertDialog open={emailConfirmDialog.open} onOpenChange={(open) => setEmailConfirmDialog({open})}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Dërgo Email</AlertDialogTitle>
+            <AlertDialogDescription>
+              A jeni i sigurt që dëshironi të dërgoni email për këtë faturë në: <strong>{emailConfirmDialog.clientEmail}</strong>?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-email">Anulo</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmSendEmail}
+              disabled={sendEmailMutation.isPending}
+              data-testid="button-confirm-email"
+            >
+              {sendEmailMutation.isPending ? "Duke dërguar..." : "Dërgo Email"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
