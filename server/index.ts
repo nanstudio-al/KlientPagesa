@@ -9,7 +9,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 // Trust proxy for both development and production (Replit uses proxies in both)
-app.set('trust proxy', true);
+// Use secure proxy configuration to prevent rate limit bypass
+if (process.env.NODE_ENV === 'production') {
+  // In production, trust specific proxy ranges
+  app.set('trust proxy', ['loopback', 'linklocal', 'uniquelocal']);
+} else {
+  // In development, allow local proxies only
+  app.set('trust proxy', ['loopback']);
+}
 
 app.use((req, res, next) => {
   const start = Date.now();

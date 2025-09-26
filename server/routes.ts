@@ -51,6 +51,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
     standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+    // Configure trust proxy securely to prevent bypass
+    trustProxy: false, // Use req.ip from Express app trust proxy setting
     // Skip rate limiting for auth endpoints
     skip: (req) => {
       const authPaths = ['/api/auth/login', '/api/auth/logout'];
@@ -216,6 +218,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
     standardHeaders: true,
     legacyHeaders: false,
+    // Configure trust proxy securely to prevent bypass
+    trustProxy: false, // Use req.ip from Express app trust proxy setting
   });
 
   // Custom authentication routes
