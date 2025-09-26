@@ -8,6 +8,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
+import puppeteer from "puppeteer";
 const pgSession = connectPgSimple(session);
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -709,7 +710,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Invoice PDF download endpoint
+  // Invoice PDF download endpoint - Direct PDF generation
   app.get("/api/invoices/:id/download", async (req, res) => {
     try {
       const { id } = req.params;
@@ -727,68 +728,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Client or service not found' });
       }
 
-      // Generate HTML content for PDF
-      const htmlContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <title>Fatura ${invoice.id}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 40px; }
-            .header { border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
-            .invoice-number { font-size: 24px; font-weight: bold; color: #333; }
-            .client-info, .invoice-details { margin-bottom: 30px; }
-            .label { font-weight: bold; color: #555; }
-            .amount { font-size: 20px; font-weight: bold; color: #2563eb; }
-            .status { padding: 4px 12px; border-radius: 4px; color: white; }
-            .status.paid { background-color: #16a34a; }
-            .status.pending { background-color: #f59e0b; }
-            .status.overdue { background-color: #dc2626; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="invoice-number">FATURA #${invoice.id.slice(-8).toUpperCase()}</div>
-            <p>Data e lëshimit: ${new Date(invoice.issueDate).toLocaleDateString('sq-AL')}</p>
-            <p>Skadenca: ${new Date(invoice.dueDate).toLocaleDateString('sq-AL')}</p>
-          </div>
-          
-          <div class="client-info">
-            <h3>Faturuar për:</h3>
-            <p><span class="label">Klienti:</span> ${client.name}</p>
-            <p><span class="label">Email:</span> ${client.email}</p>
-            ${client.phone ? `<p><span class="label">Telefoni:</span> ${client.phone}</p>` : ''}
-            ${client.address ? `<p><span class="label">Adresa:</span> ${client.address}</p>` : ''}
-            ${client.taxId ? `<p><span class="label">Numri Fiskal:</span> ${client.taxId}</p>` : ''}
-          </div>
-          
-          <div class="invoice-details">
-            <h3>Detajet e shërbimit:</h3>
-            <p><span class="label">Shërbimi:</span> ${service.name}</p>
-            <p><span class="label">Përshkrimi:</span> ${service.description || 'N/A'}</p>
-            <p><span class="label">Çmimi:</span> <span class="amount">${invoice.amount}€</span></p>
-            <p><span class="label">Statusi:</span> 
-              <span class="status ${invoice.status}">
-                ${invoice.status === 'paid' ? 'Paguar' : invoice.status === 'pending' ? 'Në pritje' : 'Vonesa'}
-              </span>
-            </p>
-            ${invoice.paidDate ? `<p><span class="label">Data e pagesës:</span> ${new Date(invoice.paidDate).toLocaleDateString('sq-AL')}</p>` : ''}
-          </div>
-          
-          <div style="margin-top: 50px; text-align: center; color: #666; font-size: 12px;">
-            <p>Ky dokument është gjeneruar automatikisht nga sistemi i menaxhimit të klientëve</p>
-          </div>
-        </body>
-        </html>
-      `;
+      // Base64 encoded NaN Studio logo
+      const logoBase64 = "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...";
 
-      // Return formatted HTML for browser PDF generation (more reliable than server-side Puppeteer)
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.setHeader('Content-Disposition', `inline; filename="fatura-${invoice.id.slice(-8)}.html"`);
-      
-      // Enhanced HTML with modern design and logo
-      const printableHtml = `
+      // Generate HTML content for PDF with embedded logo
+      const htmlContent = `
         <!DOCTYPE html>
         <html>
         <head>
@@ -809,50 +753,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
               padding: 40px;
             }
             
-            .print-actions { 
-              margin-bottom: 30px;
-              text-align: center;
-              background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-              padding: 20px;
-              border-radius: 12px;
-              box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
-            }
-            
-            .print-actions button { 
-              background: white;
-              color: #1d4ed8;
-              border: none;
-              padding: 14px 28px;
-              border-radius: 8px;
-              margin: 0 10px;
-              cursor: pointer;
-              font-size: 16px;
-              font-weight: 600;
-              box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-              transition: all 0.2s ease;
-            }
-            
-            .print-actions button:hover { 
-              transform: translateY(-2px);
-              box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            }
-            
-            .print-actions button.secondary { 
-              background: transparent;
-              color: white;
-              border: 2px solid white;
-            }
-            
-            .print-actions button.secondary:hover { 
-              background: white;
-              color: #1d4ed8;
-            }
-            
             .invoice-container {
               background: white;
               border-radius: 16px;
-              box-shadow: 0 4px 25px rgba(0, 0, 0, 0.08);
               overflow: hidden;
+              max-width: 800px;
+              margin: 0 auto;
             }
             
             .invoice-header {
@@ -869,17 +775,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
               margin-bottom: 30px;
             }
             
-            .logo-placeholder {
+            .logo-image {
               width: 120px;
-              height: 60px;
-              background: rgba(255, 255, 255, 0.1);
+              height: auto;
               border-radius: 8px;
-              border: 2px dashed rgba(255, 255, 255, 0.3);
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-size: 12px;
-              color: rgba(255, 255, 255, 0.8);
+              background: rgba(255, 255, 255, 0.1);
+              padding: 8px;
             }
             
             .company-info h1 {
@@ -904,6 +805,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               font-size: 32px;
               font-weight: 800;
               margin-bottom: 10px;
+              color: #ffffff;
             }
             
             .invoice-dates {
@@ -1058,24 +960,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
               font-weight: 600;
               color: #0ea5e9;
             }
-            
-            @media print {
-              .print-actions { display: none !important; }
-              body { padding: 20px; }
-              .invoice-container { box-shadow: none; }
-            }
           </style>
         </head>
         <body>
-          <div class="print-actions">
-            <button id="print-btn">📄 Printo si PDF</button>
-            <button id="close-btn" class="secondary">❌ Mbyll</button>
-          </div>
-          
           <div class="invoice-container">
             <div class="invoice-header">
               <div class="logo-section">
-                <div class="logo-placeholder">NaN Studio</div>
+                <img src="data:image/png;base64,${logoBase64}" alt="NaN Studio" class="logo-image" />
                 <div class="company-info">
                   <h1>NaN Studio</h1>
                   <p>Professional Technology Services</p>
@@ -1170,35 +1061,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
               <div class="footer-logo">NaN Studio - Professional Technology Services</div>
             </div>
           </div>
-          
-          <script>
-            // Auto-focus for better print experience and button handlers
-            window.addEventListener('load', function() {
-              console.log('Fatura e ngarkuar. Klikoni "Printo si PDF" për të ruajtur si PDF.');
-              
-              // Add event listeners for buttons (CSP-compliant)
-              document.getElementById('print-btn').addEventListener('click', function() {
-                window.print();
-              });
-              
-              document.getElementById('close-btn').addEventListener('click', function() {
-                window.close();
-              });
-            });
-          </script>
         </body>
         </html>
       `;
-      
-      res.send(printableHtml);
-    } catch (error) {
-      console.error('Download invoice error details:', {
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-        name: error instanceof Error ? error.name : typeof error
+
+      // Generate PDF using Puppeteer
+      const browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
       });
+      
+      const page = await browser.newPage();
+      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+      
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: {
+          top: '0.5in',
+          right: '0.5in',
+          bottom: '0.5in',
+          left: '0.5in'
+        }
+      });
+      
+      await browser.close();
+
+      // Set headers for PDF download
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="fatura-${invoice.id.slice(-8)}.pdf"`);
+      res.setHeader('Content-Length', pdfBuffer.length);
+      
+      // Send PDF buffer
+      res.send(pdfBuffer);
+      
+    } catch (error) {
+      console.error('PDF generation error:', error);
       res.status(500).json({ 
-        error: 'Failed to generate invoice document',
+        error: 'Failed to generate PDF',
         details: process.env.NODE_ENV === 'development' && error instanceof Error ? error.message : undefined
       });
     }
