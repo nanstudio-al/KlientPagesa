@@ -7,6 +7,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Link, useLocation } from "wouter";
 import { 
@@ -51,6 +52,13 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const { setOpenMobile, isMobile } = useSidebar();
+
+  const handleLinkClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
 
   return (
     <Sidebar data-testid="sidebar-main">
@@ -66,7 +74,7 @@ export function AppSidebar() {
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive}>
-                      <Link href={item.url} data-testid={`link-${item.title.toLowerCase()}`}>
+                      <Link href={item.url} data-testid={`link-${item.title.toLowerCase()}`} onClick={handleLinkClick}>
                         <item.icon />
                         <span>{item.title}</span>
                       </Link>
@@ -79,7 +87,7 @@ export function AppSidebar() {
               {isAdmin && (
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/users"}>
-                    <Link href="/users" data-testid="link-përdoruesit">
+                    <Link href="/users" data-testid="link-përdoruesit" onClick={handleLinkClick}>
                       <Settings />
                       <span>Përdoruesit</span>
                     </Link>
