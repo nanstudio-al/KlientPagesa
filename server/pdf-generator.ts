@@ -267,14 +267,6 @@ export async function generateModernInvoicePDF(invoice: InvoiceWithServices, cli
      .fillColor(colors.primary)
      .text(`€${invoice.totalAmount}`, leftMargin + 450, currentY + 16);
 
-  // SIMPLE FOOTER
-  const footerY = pageHeight - 30;
-  
-  doc.font('Helvetica')
-     .fontSize(8)
-     .fillColor(colors.light)
-     .text('NaN Studio - Professional Technology Services', 
-           leftMargin, footerY, { width: usableWidth, align: 'center' });
 
   // Finalize PDF
   doc.end();
