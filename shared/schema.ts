@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, decimal, timestamp, integer, pgEnum, index, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, decimal, timestamp, integer, pgEnum, index, jsonb, serial } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -43,6 +43,7 @@ export const roleEnum = pgEnum("role", ["admin", "user"]);
 // Invoices table
 export const invoices = pgTable("invoices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceNumber: integer("invoice_number"),
   clientId: varchar("client_id").notNull().references(() => clients.id),
   serviceId: varchar("service_id").notNull().references(() => services.id),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
@@ -69,6 +70,7 @@ export const insertClientServiceSchema = createInsertSchema(clientServices).omit
 
 export const insertInvoiceSchema = createInsertSchema(invoices).omit({
   id: true,
+  invoiceNumber: true,
   issueDate: true,
 }).extend({
   dueDate: z.coerce.date(),
