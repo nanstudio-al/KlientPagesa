@@ -10,6 +10,10 @@ import {
   type PaymentStatus,
   type User,
   type UpsertUser,
+  type InsertUser,
+  type CreateUser,
+  type UpdateUser,
+  type UserRole,
   clients,
   services,
   clientServices,
@@ -25,9 +29,16 @@ const sql = neon(process.env.DATABASE_URL!);
 const db = drizzle(sql);
 
 export interface IStorage {
-  // User operations
-  // (IMPORTANT) these user operations are mandatory for Replit Auth.
+  // User operations - Extended for custom authentication
   getUser(id: string): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  updateUser(id: string, updates: UpdateUser): Promise<User | undefined>;
+  setUserPassword(id: string, passwordHash: string): Promise<User | undefined>;
+  setUserRole(id: string, role: UserRole): Promise<User | undefined>;
+  deactivateUser(id: string): Promise<User | undefined>;
+  listUsers(): Promise<User[]>;
+  // Legacy method for compatibility
   upsertUser(user: UpsertUser): Promise<User>;
 
   // Client operations
@@ -60,16 +71,105 @@ export interface IStorage {
 }
 
 export class MemStorage implements IStorage {
+  private users: Map<string, User>;
   private clients: Map<string, Client>;
   private services: Map<string, Service>;
   private clientServices: Map<string, ClientService>;
   private invoices: Map<string, Invoice>;
 
   constructor() {
+    this.users = new Map();
     this.clients = new Map();
     this.services = new Map();
     this.clientServices = new Map();
     this.invoices = new Map();
+  }
+
+  // User operations
+  async getUser(id: string): Promise<User | undefined> {
+    return this.users.get(id);
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(user => user.username === username);
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const id = randomUUID();
+    const user: User = {
+      id,
+      username: insertUser.username,
+      passwordHash: insertUser.passwordHash,
+      email: insertUser.email ?? null,
+      firstName: insertUser.firstName ?? null,
+      lastName: insertUser.lastName ?? null,
+      profileImageUrl: insertUser.profileImageUrl ?? null,
+      role: insertUser.role ?? 'user',
+      isActive: insertUser.isActive ?? 1,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.users.set(id, user);
+    return user;
+  }
+
+  async updateUser(id: string, updates: UpdateUser): Promise<User | undefined> {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+    
+    const updatedUser = { ...user, ...updates, updatedAt: new Date() };
+    this.users.set(id, updatedUser);
+    return updatedUser;
+  }
+
+  async setUserPassword(id: string, passwordHash: string): Promise<User | undefined> {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+    
+    const updatedUser = { ...user, passwordHash, updatedAt: new Date() };
+    this.users.set(id, updatedUser);
+    return updatedUser;
+  }
+
+  async setUserRole(id: string, role: UserRole): Promise<User | undefined> {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+    
+    const updatedUser = { ...user, role, updatedAt: new Date() };
+    this.users.set(id, updatedUser);
+    return updatedUser;
+  }
+
+  async deactivateUser(id: string): Promise<User | undefined> {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+    
+    const updatedUser = { ...user, isActive: 0, updatedAt: new Date() };
+    this.users.set(id, updatedUser);
+    return updatedUser;
+  }
+
+  async listUsers(): Promise<User[]> {
+    return Array.from(this.users.values());
+  }
+
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    if (userData.id && this.users.has(userData.id)) {
+      const existing = this.users.get(userData.id)!;
+      const updated = { ...existing, ...userData, updatedAt: new Date() };
+      this.users.set(userData.id, updated);
+      return updated;
+    } else {
+      const id = userData.id || randomUUID();
+      const user: User = {
+        ...userData,
+        id,
+        createdAt: userData.createdAt || new Date(),
+        updatedAt: new Date()
+      } as User;
+      this.users.set(id, user);
+      return user;
+    }
   }
 
   // Client operations
@@ -236,13 +336,59 @@ export class MemStorage implements IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  // User operations
-  // (IMPORTANT) these user operations are mandatory for Replit Auth.
+  // User operations - Extended for custom authentication
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
   }
 
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
+  }
+
+  async createUser(userData: InsertUser): Promise<User> {
+    const [user] = await db.insert(users).values(userData).returning();
+    return user;
+  }
+
+  async updateUser(id: string, updates: UpdateUser): Promise<User | undefined> {
+    const [user] = await db.update(users)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async setUserPassword(id: string, passwordHash: string): Promise<User | undefined> {
+    const [user] = await db.update(users)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async setUserRole(id: string, role: UserRole): Promise<User | undefined> {
+    const [user] = await db.update(users)
+      .set({ role, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async deactivateUser(id: string): Promise<User | undefined> {
+    const [user] = await db.update(users)
+      .set({ isActive: 0, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async listUsers(): Promise<User[]> {
+    return await db.select().from(users);
+  }
+
+  // Legacy method for compatibility
   async upsertUser(userData: UpsertUser): Promise<User> {
     const [user] = await db
       .insert(users)
