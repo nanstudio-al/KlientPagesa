@@ -764,13 +764,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const rightMargin = pageWidth - 50;
         const usableWidth = rightMargin - leftMargin;
         
-        // Header with blue background
-        doc.rect(0, 0, pageWidth, 200).fill('#0ea5e9');
+        // Header with white background
+        doc.rect(0, 0, pageWidth, 200).fill('#ffffff').stroke('#e2e8f0');
         
         // Add NaN Studio logo image
         const logoBase64 = "iVBORw0KGgoAAAANSUhEUgAAA+sAAAOMCAYAAAA18SKrAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAP+lSURBVHhe7N11mBz14cfx98z67rnk4i5H3EkCwSJIcAiSQIsUWlpKoTgtBYoVfrRIS4G2WPHirkESICQQJyGBOPGc+97uzvz+2JPdPcnFYBM+r+eZBzK2M7N7u/OZrxm2bduIiIiIiIiISNIwE2eIiIiIiIiIyI/LWPf9OpWsi4iIiIiIiCQR4+CDD1ZYFxEREREREUkiqgYvIiIiIiIikmQU1kVERERERESSjMK6iIiIiIiISJJRWBcRERERERFJMgrrIiIiIiIiIklGYV1EREREREQkySisi4iIiIiIiCQZhXURERERERGRJKOwLiIiIiIiIpJkFNZFREREREREkozCuoiIiIiIiEiSUVgXERERERERSTIK6yIiIiIiIiJJRmFdREREREREJMkorIuIiIiIiIgkGYV1ERERERERkSSjsC4iIiIiIiKSZIyDDz7YTpwpkizWr1+fOGuP6tq1a+Ksfcq4ceP4/PPPE2cnlb39Hu5pyf6Z2Bfe833dvniN98VjFhERkdapZF1EREREREQkySisi4gIAMcffzz/+9//ePPNN1udXnjhBY477rjEzfeaadOmcc455yTOFhEREdmvKayLiAgAv/zlL1m9ejVPP/10q9PKlSv51a9+lbj5XnHyySczffp0UlJSEhcltZNPPpnHHnuM66+/Hq/Xm7hYREREZIcU1kVEpMHixYt56qmnWp0WL16cuNlecfrpp3P++ecDkJqaymmnncbQoUMTV0s6V199NWeddRbLli1jzJgxHHrooYmriIiIiOyQwrqIyF5y++23c/vttyfO3qeceeaZnHnmmYmzfxBOp7Ph//v06cPPf/5zbr31Vm6++WaysrLi1k0mb7/9NjfddBMPPfQQJJzHvsAwDIYOHUpubm7ioh9Nbm4uQ4cOxTCMxEUiIiL7LYV12W+c9+xi1q1bzLPnJS7ZRVPv46237mNq4vyWTL2Pt2bN4q372ryF1LtrBuvWrWsyLa5/M897lsVxy2Le55hlDes3zJ/BXY1zZCedfPLJnHXWWZx11lmcfPLJiYv3ihEjRjBs2DAAnnrqKZ599lkAvvrqK8466yweffRRDjjgAB544AE6dOiQsHVyWLx4MYsWLWq4ZrNnz05cJWkZhsGwYcPIycnBNJPnFsE0TXJychg2bJgCu4iI/GQkzy+xyC67ixnr1nEpy1iZuGg3TB3fG1bO4vnEBc249slZzDoXVq5LXCJtcsUEunXr1jjdNJtSVvLeGY80rlM6m5sa1hlMdNF5PHtpf5bd1I1u3W5iWf9LG0L8XdP7s+ymCVzRuAdpg/oglJ2djc/na2in7vP5yM7OjltnTxsxYgR//vOf+dOf/tRQ3f2JJ57g6aefpqqqiuLiYl544QXOP/98qqurueKK5H13e/Xqxamnnsrbb79NUVFRw/xzzjmHJ554gscee4yTTjopbpsfW31Qz8rKYunSpWzdujVxlR/N1q1bWbp0KVlZWQrsIiLyk6GwLvuBK5jQrRuDz9iQuGA3XMsJw4qYdUlbojrcftZ4xh9zCZsTF8guuWv6WLY/HxO0++eSvn0DMdG9fgG5LOO9RwAeYcP2utl3zWDy9nvqAr3sDNu2ASgsLGzSVr2wsDBunT1p+PDh/PnPf2bz5s0UFhZy6623NgT2p556iscee6xh3dLSUu6++27y8/M55ZRTYvaSPH7zm99QUlLCo48+CkB6ejp/+9vfmDp1KkuWLGHr1q384he/YOLEiYmb/mgGDx5MdnY2hmEwcOBAJk2aFDcdeuihDBkyBLfbnbjpHuN2uxk6dCiHHnpok9cfOHAghmGQnZ3N4MGDEzcVERHZ7yisizTn2gF0W7eUfbu1cevy8vIa2lTvaGrXrl3i5nvPec8yOXc2TyUWmvae2lANfkZD3fZlbKc/k88DOI/OudvZ8MhdzJi8nXt+hKT+l7/8JW7q2bMnPXv2bDJf4g0ePJibb76ZjRs3ctVVV3HVVVexceNGbr311hZD2aJFi1izZg2TJk1KXPSjGzduHP369ePRRx+lsrISt9vNLbfcQvv27fn973/PnXfeydVXX83q1as59thjEzf/0WzYsAHbtrFtm/Xr17Nq1aq4qaCggOzsbMaMGbNXArvb7WbMmDFkZWVRUFDQ5PXXr1+PbdtEIhE2bNiQuKWIiMj+R2FdpImpi8HZzJi8nXt+BK99999//3tc9p155pkcdNBBvPfee/zqV7/irrvuIjs7O276yU9+wsSJE3nppZcYOHAgl19+Oe3ateOGG26A/rAPOI888siErf/BJk2axPPPP89jjz3G3Llz+fGPf8wVV1xBkyZP5x//8BddddVVjBgxgiuvvJJrr72Wtm3b8uijj9KuXTsuvfRS3nnnHc444wx69erF7NmzefXVV3nggQc466yzGDlyJGPHjuWFF17gzDPP5K9//SsPPfQQv//977njjjsaNHwwgwYN5uGHH2bDhg1cccUVXH755WzcuJEPDYrz589n7NixXHDhRQ2h7KOPPmLy5Ml0796dOXPmJO76wzJu3Dj69evHo48+SlVVFW63m1tuuYX27dvz+9//njvvvJOrr76a1atXc+yxxyZu+6PZsGEDtm1j2zbr169n1apVcVNBQQFZWVmMGTNmrwR2t9vNmDFjyMrKoqCgoMnrr1+/Htu2iUQiOzZP/r+wOYf2DMZMHCQ=";
-        // Set text color to white for header content
-        doc.fill('#ffffff');
+        // Set text color to dark for header content
+        doc.fill('#1e293b');
         
         // Add NaN Studio logo image (properly sized)
         try {
@@ -908,15 +908,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         doc.rect(leftMargin, yPos, usableWidth, 80).fill('#ffffff').stroke('#e2e8f0');
         yPos += 20;
         
-        // Service item
+        // Service item - smaller text
         doc.font('Helvetica-Bold')
-           .fontSize(14)
+           .fontSize(12)
            .fill('#1e293b')
            .text(service.name, leftMargin + 20, yPos, { width: usableWidth - 120 });
         yPos += 20;
         
         doc.font('Helvetica')
-           .fontSize(12)
+           .fontSize(10)
            .fill('#64748b')
            .text(service.description || 'Shërbim profesional teknologjik', leftMargin + 20, yPos, { width: usableWidth - 120 });
         
@@ -926,37 +926,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const amountY = yPos - 20;
         
         doc.font('Helvetica-Bold')
-           .fontSize(24)
+           .fontSize(16)
            .fill('#0ea5e9')
            .text(amountText, amountX, amountY, { width: 60, align: 'right' });
            
         doc.font('Helvetica-Bold')
-           .fontSize(24)
+           .fontSize(16)
            .fill('#0ea5e9')
            .text('€', amountX + 65, amountY);
         
         yPos += 80;
         
-        // Footer
-        doc.rect(0, yPos, pageWidth, 100).fill('#f8fafc').stroke('#e2e8f0');
-        yPos += 20;
+        // Footer - positioned at bottom of page
+        const pageHeight = doc.page.height;
+        const footerY = pageHeight - 120; // 120px from bottom
+        
+        doc.rect(0, footerY, pageWidth, 100).fill('#f8fafc').stroke('#e2e8f0');
         
         doc.font('Helvetica')
            .fontSize(12)
            .fill('#64748b')
            .text('Ky dokument është gjeneruar automatikisht nga sistemi i menaxhimit të klientëve', 
-                 leftMargin, yPos, { width: usableWidth, align: 'center' });
-        yPos += 20;
+                 leftMargin, footerY + 20, { width: usableWidth, align: 'center' });
         
         doc.text('Faleminderit që zgjodhët shërbimet tona profesionale', 
-                 leftMargin, yPos, { width: usableWidth, align: 'center' });
-        yPos += 30;
+                 leftMargin, footerY + 40, { width: usableWidth, align: 'center' });
         
         doc.font('Helvetica-Bold')
            .fontSize(14)
            .fill('#0ea5e9')
            .text('NaN Studio - Professional Technology Services', 
-                 leftMargin, yPos, { width: usableWidth, align: 'center' });
+                 leftMargin, footerY + 70, { width: usableWidth, align: 'center' });
         
         // Finalize the PDF
         doc.end();
