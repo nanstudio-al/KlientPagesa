@@ -1,0 +1,32 @@
+efused to load the script 'https://replit.com/public/js/replit-dev-banner.js' because it violates the following Content Security Policy directive: "script-src 'self'". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback.
+
+api/auth/me:1  Failed to load resource: the server responded with a status of 401 ()
+index-DEqtMHE1.js:263 Refused to apply inline style because it violates the following Content Security Policy directive: "style-src 'self' fonts.googleapis.com". Either the 'unsafe-inline' keyword, a hash ('sha256-nzTgYzXYDNe6BAHiiI7NNlfK8n/auuOAhh2t92YvuXo='), or a nonce ('nonce-...') is required to enable inline execution.
+
+W2 @ index-DEqtMHE1.js:263
+index-DEqtMHE1.js:307 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-DEqtMHE1.js:307
+4index-DEqtMHE1.js:307 View client: 60d6cb75-ebf3-4a32-8d03-f3c8842854c8
+index-DEqtMHE1.js:263 Refused to apply inline style because it violates the following Content Security Policy directive: "style-src 'self' fonts.googleapis.com". Either the 'unsafe-inline' keyword, a hash ('sha256-nzTgYzXYDNe6BAHiiI7NNlfK8n/auuOAhh2t92YvuXo='), or a nonce ('nonce-...') is required to enable inline execution.
+
+W2 @ index-DEqtMHE1.js:263
+index-DEqtMHE1.js:307 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-DEqtMHE1.js:307
+index-DEqtMHE1.js:40 Refused to apply inline style because it violates the following Content Security Policy directive: "style-src 'self' fonts.googleapis.com". Either the 'unsafe-inline' keyword, a hash ('sha256-441zG27rExd4/il+NvIqyL8zFx5XmyNQtE381kSkUJk='), or a nonce ('nonce-...') is required to enable inline execution.
+
+jf @ index-DEqtMHE1.js:40
+index-DEqtMHE1.js:307 Edit service: 2fd740e7-eb54-4e6a-acb8-30632b23259a
+index-DEqtMHE1.js:263 Refused to apply inline style because it violates the following Content Security Policy directive: "style-src 'self' fonts.googleapis.com". Either the 'unsafe-inline' keyword, a hash ('sha256-nzTgYzXYDNe6BAHiiI7NNlfK8n/auuOAhh2t92YvuXo='), or a nonce ('nonce-...') is required to enable inline execution.
+
+W2 @ index-DEqtMHE1.js:263
+index-DEqtMHE1.js:307 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-DEqtMHE1.js:307
+index-DEqtMHE1.js:40 Refused to apply inline style because it violates the following Content Security Policy directive: "style-src 'self' fonts.googleapis.com". Either the 'unsafe-inline' keyword, a hash ('sha256-441zG27rExd4/il+NvIqyL8zFx5XmyNQtE381kSkUJk='), or a nonce ('nonce-...') is required to enable inline execution.
+
+jf @ index-DEqtMHE1.js:40
+index-DEqtMHE1.js:40 Refused to apply inline style because it violates the following Content Security Policy directive: "style-src 'self' fonts.googleapis.com". Either the 'unsafe-inline' keyword, a hash ('sha256-441zG27rExd4/il+NvIqyL8zFx5XmyNQtE381kSkUJk='), or a nonce ('nonce-...') is required to enable inline execution.
+
+jf @ index-DEqtMHE1.js:40
+index-DEqtMHE1.js:307 Download invoice: 621ce7cb-79d5-443b-af24-78edecf58db3
+2index-DEqtMHE1.js:307 Send invoice email: 621ce7cb-79d5-443b-af24-78edecf58db3
+index-DEqtMHE1.js:307 Download invoice: 621ce7cb-79d5-443b-af24-78edecf58db3

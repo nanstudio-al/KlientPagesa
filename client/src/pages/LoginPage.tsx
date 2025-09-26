@@ -136,7 +136,7 @@ export default function LoginPage() {
                   disabled={isLoading}
                   data-testid="button-login"
                 >
-                  {isLoading ? "Duke u kyçur..." : "Kyçuni"}
+                  {isLoading ? "Logging in..." : "Log in"}
                 </Button>
               </form>
             </Form>

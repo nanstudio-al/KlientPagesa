@@ -44,15 +44,15 @@ function AppContent() {
   const logoutMutation = useMutation({
     mutationFn: () => apiRequest('POST', '/api/auth/logout'),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
-      toast({
-        title: "Logout u realizua",
-        description: "Ju u çkyçët me sukses.",
-      });
+      // Clear all cache and force refresh
+      queryClient.clear();
+      // Force window refresh to ensure complete logout
+      window.location.href = '/';
     },
     onError: () => {
       // Force refresh even if logout fails
-      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      queryClient.clear();
+      window.location.href = '/';
     },
   });
 
@@ -102,7 +102,7 @@ function AppContent() {
                 data-testid="button-logout"
               >
                 <LogOut className="w-4 h-4 mr-2" />
-                {logoutMutation.isPending ? "Duke u çkyçur..." : "Çkyçu"}
+                {logoutMutation.isPending ? "Logging out..." : "Logout"}
               </Button>
               <ThemeToggle />
             </div>
