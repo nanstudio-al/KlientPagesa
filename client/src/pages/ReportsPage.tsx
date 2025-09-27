@@ -56,6 +56,57 @@ export default function ReportsPage() {
   const hasErrors = monthlyError || servicesError || overdueError;
   const isLoading = monthlyLoading || servicesLoading || overdueLoading;
 
+  const exportToCSV = () => {
+    if (!monthlyStats) {
+      alert('Të dhënat nuk janë ngarkuar akoma');
+      return;
+    }
+
+    const currentDate = new Date().toLocaleDateString('sq-AL');
+    
+    // Create CSV content
+    let csvContent = `Raport i Përgjithshëm Financiar - ${currentDate}\n\n`;
+    
+    // Monthly stats section
+    csvContent += `STATISTIKAT MUJORE\n`;
+    csvContent += `Të ardhura këtë muaj,${monthlyStats.currentMonthRevenue}€\n`;
+    csvContent += `Të ardhura në pritje,${monthlyStats.currentMonthPendingRevenue}€\n`;
+    csvContent += `Fatura të lëshuara,${monthlyStats.currentMonthInvoices}\n`;
+    csvContent += `Klientë aktivë,${monthlyStats.totalClients}\n`;
+    csvContent += `Rritja e të ardhurave,${monthlyStats.revenueGrowth}%\n\n`;
+    
+    // Top services section
+    csvContent += `SHËRBIMET MË TË SUKSESSHME\n`;
+    csvContent += `Pozicioni,Emri i Shërbimit,Të ardhura,Klientë,Rritja\n`;
+    topServices.forEach((service, index) => {
+      csvContent += `${index + 1},${service.name},${service.revenue}€,${service.clients},${service.growth}\n`;
+    });
+    
+    csvContent += `\n`;
+    
+    // Overdue payments section
+    csvContent += `PAGESA TË PRAPAMBETURA\n`;
+    csvContent += `Klienti,Shuma,Ditë vonesa,ID Fature\n`;
+    overduePayments.forEach((payment) => {
+      csvContent += `${payment.clientName},${payment.amount}€,${payment.daysDue},${payment.invoiceId}\n`;
+    });
+    
+    // Calculate total overdue
+    const totalOverdue = overduePayments.reduce((sum, payment) => sum + payment.amount, 0);
+    csvContent += `\nTOTALI I PRAPAMBETUR,${totalOverdue}€\n`;
+    
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `raport-financiar-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -75,7 +126,7 @@ export default function ReportsPage() {
             <h1 className="text-3xl font-bold">Raporte</h1>
             <p className="text-muted-foreground">Statistika dhe analiza financiare</p>
           </div>
-          <Button variant="outline" data-testid="button-export-report">
+          <Button variant="outline" onClick={exportToCSV} data-testid="button-export-report">
             <Download className="w-4 h-4 mr-2" />
             Eksporto raport
           </Button>
