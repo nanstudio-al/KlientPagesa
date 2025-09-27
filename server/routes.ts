@@ -573,16 +573,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Client not found' });
       }
 
-      const success = await storage.deleteClient(req.params.id);
-      if (!success) {
-        return res.status(500).json({ 
-          error: 'Failed to delete client',
-          message: 'An error occurred while deleting the client and related data.'
-        });
-      }
+      await storage.deleteClient(req.params.id);
       res.status(204).send();
     } catch (error) {
-      res.status(500).json({ error: 'Failed to delete client' });
+      console.error('Error deleting client:', error);
+      res.status(500).json({ 
+        error: 'Failed to delete client',
+        message: 'An error occurred while deleting the client and related data.'
+      });
     }
   });
 
@@ -647,17 +645,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Service not found' });
       }
 
-      const success = await storage.deleteService(req.params.id);
-      if (!success) {
-        // If deletion failed, it's likely due to invoice references
-        return res.status(409).json({ 
-          error: 'Cannot delete service', 
-          message: 'This service is referenced by existing invoices and cannot be deleted to preserve historical data.' 
-        });
-      }
+      await storage.deleteService(req.params.id);
       res.status(204).send();
     } catch (error) {
-      res.status(500).json({ error: 'Failed to delete service' });
+      console.error('Error deleting service:', error);
+      if (error instanceof Error && error.message.startsWith('SERVICE_REFERENCED_BY_INVOICES')) {
+        const invoiceCount = error.message.split(':')[1] || '1';
+        return res.status(409).json({ 
+          error: 'Cannot delete service', 
+          message: `Ky shërbim përdoret nga ${invoiceCount} faturë(s) dhe nuk mund të fshihet për të ruajtur të dhënat historike.`
+        });
+      }
+      res.status(500).json({ 
+        error: 'Failed to delete service',
+        message: 'An error occurred while deleting the service.'
+      });
     }
   });
 
@@ -1014,8 +1016,139 @@ ${servicesList}
     }
   });
 
-  // Reports routes
+  // Reports API endpoints
   app.get("/api/reports/monthly-stats", async (req, res) => {
+    try {
+      const invoices = await storage.getAllInvoices();
+      const clients = await storage.getAllClients();
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+      
+      // Current month stats
+      const currentMonthInvoices = invoices.filter(inv => {
+        const invoiceDate = new Date(inv.issueDate);
+        return invoiceDate.getMonth() === currentMonth && 
+               invoiceDate.getFullYear() === currentYear;
+      });
+      
+      const currentMonthRevenue = currentMonthInvoices
+        .filter(inv => inv.status === 'paid')
+        .reduce((sum, inv) => sum + parseFloat(inv.totalAmount || '0'), 0);
+      
+      const currentMonthPendingRevenue = currentMonthInvoices
+        .filter(inv => inv.status === 'pending')
+        .reduce((sum, inv) => sum + parseFloat(inv.totalAmount || '0'), 0);
+      
+      // Previous month stats for growth calculation
+      const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+      const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+      
+      const prevMonthRevenue = invoices
+        .filter(inv => {
+          const invoiceDate = new Date(inv.issueDate);
+          return invoiceDate.getMonth() === prevMonth && 
+                 invoiceDate.getFullYear() === prevYear &&
+                 inv.status === 'paid';
+        })
+        .reduce((sum, inv) => sum + parseFloat(inv.totalAmount || '0'), 0);
+      
+      const revenueGrowth = prevMonthRevenue > 0 
+        ? Math.round(((currentMonthRevenue - prevMonthRevenue) / prevMonthRevenue) * 100)
+        : 0;
+      
+      res.json({
+        currentMonthRevenue: Math.round(currentMonthRevenue),
+        currentMonthPendingRevenue: Math.round(currentMonthPendingRevenue),
+        currentMonthInvoices: currentMonthInvoices.length,
+        totalClients: clients.length,
+        revenueGrowth
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch monthly stats' });
+    }
+  });
+
+  app.get("/api/reports/top-services", async (req, res) => {
+    try {
+      const invoices = await storage.getAllInvoices();
+      const services = await storage.getAllServices();
+      
+      // Calculate revenue per service
+      const serviceRevenue: { [key: string]: { revenue: number, clients: Set<string>, invoices: any[] } } = {};
+      
+      invoices.forEach(invoice => {
+        if (invoice.services) {
+          invoice.services.forEach(invoiceService => {
+            const serviceId = invoiceService.service.id;
+            const serviceName = invoiceService.service.name;
+            const revenue = parseFloat(invoiceService.lineTotal || '0');
+            
+            if (!serviceRevenue[serviceId]) {
+              serviceRevenue[serviceId] = {
+                revenue: 0,
+                clients: new Set(),
+                invoices: []
+              };
+            }
+            
+            if (invoice.status === 'paid') {
+              serviceRevenue[serviceId].revenue += revenue;
+            }
+            serviceRevenue[serviceId].clients.add(invoice.clientId);
+            serviceRevenue[serviceId].invoices.push(invoice);
+          });
+        }
+      });
+      
+      // Convert to array and sort by revenue
+      const topServices = Object.entries(serviceRevenue)
+        .map(([serviceId, data]) => {
+          const service = services.find(s => s.id === serviceId);
+          return {
+            name: service?.name || 'Unknown Service',
+            revenue: Math.round(data.revenue),
+            clients: data.clients.size,
+            growth: '+10%' // For now, we'll calculate actual growth later
+          };
+        })
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 5);
+      
+      res.json(topServices);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch top services' });
+    }
+  });
+
+  app.get("/api/reports/overdue-payments", async (req, res) => {
+    try {
+      const overdueInvoices = await storage.getOverdueInvoices();
+      
+      const overduePayments = await Promise.all(
+        overdueInvoices.map(async (invoice) => {
+          const client = await storage.getClient(invoice.clientId);
+          const dueDate = new Date(invoice.dueDate);
+          const now = new Date();
+          const daysDue = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+          
+          return {
+            clientName: client?.name || 'Unknown',
+            amount: parseFloat(invoice.totalAmount || '0'),
+            daysDue,
+            invoiceId: invoice.id
+          };
+        })
+      );
+      
+      res.json(overduePayments);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to fetch overdue payments' });
+    }
+  });
+
+  // Client-Service assignment routes
+  app.post("/api/clients/:clientId/services", async (req, res) => {
     try {
       const allInvoices = await storage.getAllInvoices();
       const allClients = await storage.getAllClients();

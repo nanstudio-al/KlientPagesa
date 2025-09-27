@@ -549,32 +549,29 @@ export class DatabaseStorage implements IStorage {
 
   async deleteClient(id: string): Promise<boolean> {
     try {
-      // Use transaction for data consistency
-      return await db.transaction(async (tx) => {
-        // Get all invoices for this client
-        const clientInvoices = await tx.select({ id: invoices.id }).from(invoices).where(eq(invoices.clientId, id));
-        const invoiceIds = clientInvoices.map(inv => inv.id);
-        
-        // Delete all invoice services for this client's invoices (batch operation)
-        if (invoiceIds.length > 0) {
-          await tx.delete(invoiceServices).where(
-            inArray(invoiceServices.invoiceId, invoiceIds)
-          );
-        }
-        
-        // Delete all invoices for this client
-        await tx.delete(invoices).where(eq(invoices.clientId, id));
-        
-        // Delete all client-service assignments for this client
-        await tx.delete(clientServices).where(eq(clientServices.clientId, id));
-        
-        // Finally, delete the client
-        const result = await tx.delete(clients).where(eq(clients.id, id));
-        return result.rowCount > 0;
-      });
+      // Get all invoices for this client
+      const clientInvoices = await db.select({ id: invoices.id }).from(invoices).where(eq(invoices.clientId, id));
+      const invoiceIds = clientInvoices.map(inv => inv.id);
+      
+      // Delete all invoice services for this client's invoices (batch operation)
+      if (invoiceIds.length > 0) {
+        await db.delete(invoiceServices).where(
+          inArray(invoiceServices.invoiceId, invoiceIds)
+        );
+      }
+      
+      // Delete all invoices for this client
+      await db.delete(invoices).where(eq(invoices.clientId, id));
+      
+      // Delete all client-service assignments for this client
+      await db.delete(clientServices).where(eq(clientServices.clientId, id));
+      
+      // Finally, delete the client
+      const result = await db.delete(clients).where(eq(clients.id, id));
+      return result.rowCount > 0;
     } catch (error) {
       console.error('Error deleting client:', error);
-      return false;
+      throw new Error('Failed to delete client due to database error');
     }
   }
 
@@ -607,7 +604,7 @@ export class DatabaseStorage implements IStorage {
       const referencedInvoices = await db.select().from(invoiceServices).where(eq(invoiceServices.serviceId, id));
       if (referencedInvoices.length > 0) {
         console.log(`Cannot delete service ${id}: referenced by ${referencedInvoices.length} invoice(s)`);
-        return false;
+        throw new Error(`SERVICE_REFERENCED_BY_INVOICES:${referencedInvoices.length}`);
       }
       
       // Delete all client-service assignments for this service
@@ -618,7 +615,10 @@ export class DatabaseStorage implements IStorage {
       return result.rowCount > 0;
     } catch (error) {
       console.error('Error deleting service:', error);
-      return false;
+      if (error instanceof Error && error.message.startsWith('SERVICE_REFERENCED_BY_INVOICES')) {
+        throw error; // Re-throw our specific error
+      }
+      throw new Error('Failed to delete service due to database error');
     }
   }
 
