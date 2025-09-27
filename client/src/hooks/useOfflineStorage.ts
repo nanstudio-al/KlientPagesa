@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Preferences } from '@capacitor/preferences';
 import { Network } from '@capacitor/network';
 import { useToast } from '@/hooks/use-toast';
+import { useNotifications } from '@/hooks/useNotifications';
 import { apiRequest } from '@/lib/queryClient';
 
 type OfflineAction = {
@@ -30,12 +31,45 @@ export function useOfflineStorage() {
     actions: [],
     lastSync: 0
   });
+  
+  // Refs to avoid stale closures in network listener
+  const isSyncingRef = useRef(false);
+  const actionsLengthRef = useRef(0);
+  const mountedRef = useRef(true);
+  
   const { toast } = useToast();
+  const { notifySyncSuccess, notifySyncFailure } = useNotifications();
+
+  // Update refs when state changes
+  useEffect(() => {
+    isSyncingRef.current = isSyncing;
+  }, [isSyncing]);
+  
+  useEffect(() => {
+    actionsLengthRef.current = offlineData.actions.length;
+  }, [offlineData.actions.length]);
 
   // Initialize offline storage and network monitoring
   useEffect(() => {
+    mountedRef.current = true;
     initializeOfflineStorage();
-    setupNetworkMonitoring();
+    
+    let cleanupFn: (() => void) | undefined;
+    
+    setupNetworkMonitoring().then((cleanup) => {
+      if (mountedRef.current) {
+        cleanupFn = cleanup;
+      } else {
+        // Component unmounted before listener setup completed
+        cleanup();
+      }
+    });
+    
+    // Cleanup network listener on unmount
+    return () => {
+      mountedRef.current = false;
+      if (cleanupFn) cleanupFn();
+    };
   }, []);
 
   const initializeOfflineStorage = async () => {
@@ -51,29 +85,48 @@ export function useOfflineStorage() {
   };
 
   const setupNetworkMonitoring = async () => {
-    // Check initial network status
-    const status = await Network.getStatus();
-    setIsOnline(status.connected);
-
-    // Listen for network changes
-    Network.addListener('networkStatusChange', (status) => {
-      const wasOffline = !isOnline;
+    try {
+      // Check initial network status
+      const status = await Network.getStatus();
       setIsOnline(status.connected);
-      
-      if (status.connected && wasOffline) {
-        toast({
-          title: 'Lidhja u rivendos',
-          description: 'Të dhënat po sinkronizohen me serverin...',
-        });
-        syncOfflineActions();
-      } else if (!status.connected) {
-        toast({
-          title: 'Pa lidhje interneti',
-          description: 'Aplikacioni vazhdon të punojë offline.',
-          variant: 'destructive'
-        });
-      }
-    });
+
+      // Track previous state to detect transitions
+      let wasOnline = status.connected;
+
+      // Listen for network changes
+      const listener = await Network.addListener('networkStatusChange', (status) => {
+        const currentlyOnline = status.connected;
+        setIsOnline(currentlyOnline);
+        
+        // Sync when transitioning from offline to online (using refs to avoid stale closures)
+        if (currentlyOnline && !wasOnline && actionsLengthRef.current > 0 && !isSyncingRef.current) {
+          toast({
+            title: 'Lidhja u rivendos',
+            description: 'Të dhënat po sinkronizohen me serverin...',
+          });
+          syncOfflineActions();
+        } else if (!currentlyOnline) {
+          toast({
+            title: 'Pa lidhje interneti',
+            description: 'Aplikacioni vazhdon të punojë offline.',
+            variant: 'destructive'
+          });
+        }
+        
+        // Update previous state
+        wasOnline = currentlyOnline;
+      });
+
+      // Return cleanup function
+      return () => {
+        if (listener && typeof listener.remove === 'function') {
+          listener.remove();
+        }
+      };
+    } catch (error) {
+      console.error('Failed to setup network monitoring:', error);
+      return () => {}; // Return empty cleanup function
+    }
   };
 
   const saveOfflineData = async (data: OfflineData) => {
@@ -247,15 +300,24 @@ export function useOfflineStorage() {
           title: 'Sinkronizimi u krye',
           description: `${successfulActions.length} veprime u sinkronizuan me sukses.`,
         });
+        
+        // Native notification for sync success
+        notifySyncSuccess(successfulActions.length);
       }
 
     } catch (error) {
       console.error('Sync failed:', error);
+      const failedCount = offlineData.actions.length - successfulActions.length;
       toast({
         title: 'Gabim në sinkronizim',
         description: 'Disa të dhëna nuk u sinkronizuan. Do të provohet përsëri.',
         variant: 'destructive'
       });
+      
+      // Native notification for sync failure
+      if (failedCount > 0) {
+        notifySyncFailure(failedCount);
+      }
     } finally {
       setIsSyncing(false);
     }
