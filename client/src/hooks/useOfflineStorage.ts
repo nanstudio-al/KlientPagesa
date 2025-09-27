@@ -230,9 +230,45 @@ export function useOfflineStorage() {
     }
   };
 
+  // Get current offline data (fresh from storage)
+  const getCurrentOfflineData = async (): Promise<OfflineData> => {
+    try {
+      const { value } = await Preferences.get({ key: 'pagesa_offline_data' });
+      if (value) {
+        return JSON.parse(value);
+      }
+    } catch (error) {
+      console.error('Failed to get current offline data:', error);
+    }
+    return {
+      clients: [],
+      services: [],
+      invoices: [],
+      actions: [],
+      lastSync: 0
+    };
+  };
+
   // Sync offline actions with server
   const syncOfflineActions = async () => {
-    if (!isOnline || isSyncing || offlineData.actions.length === 0) {
+    if (isSyncingRef.current) {
+      return;
+    }
+
+    // Get fresh network status to avoid stale state
+    try {
+      const networkStatus = await Network.getStatus();
+      if (!networkStatus.connected) {
+        return;
+      }
+    } catch (error) {
+      console.error('Failed to check network status:', error);
+      return;
+    }
+
+    // Get fresh data to avoid stale state
+    const currentData = await getCurrentOfflineData();
+    if (currentData.actions.length === 0) {
       return;
     }
 
@@ -240,7 +276,7 @@ export function useOfflineStorage() {
     const successfulActions: string[] = [];
 
     try {
-      for (const action of offlineData.actions) {
+      for (const action of currentData.actions) {
         try {
           let endpoint = `/api/${action.entity}`;
           let method: 'POST' | 'PUT' | 'DELETE' = 'POST';
@@ -253,15 +289,17 @@ export function useOfflineStorage() {
               
               // Update temp ID with real ID in cache
               if (result && result.id && action.data.tempId) {
+                const freshData = await getCurrentOfflineData();
                 const updatedData = {
-                  ...offlineData,
-                  [action.entity]: offlineData[action.entity].map(item =>
+                  ...freshData,
+                  [action.entity]: freshData[action.entity].map(item =>
                     item.id === action.data.tempId 
                       ? { ...item, id: result.id, _offline: false }
                       : item
                   )
                 };
                 await saveOfflineData(updatedData);
+                setOfflineData(updatedData);
               }
               break;
 
@@ -285,16 +323,18 @@ export function useOfflineStorage() {
         }
       }
 
-      // Remove successfully synced actions
+      // Remove successfully synced actions using fresh data
       if (successfulActions.length > 0) {
+        const freshData = await getCurrentOfflineData();
         const updatedData = {
-          ...offlineData,
-          actions: offlineData.actions.filter(action => 
+          ...freshData,
+          actions: freshData.actions.filter(action => 
             !successfulActions.includes(action.id)
           ),
           lastSync: Date.now()
         };
         await saveOfflineData(updatedData);
+        setOfflineData(updatedData);
 
         toast({
           title: 'Sinkronizimi u krye',

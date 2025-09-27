@@ -15,6 +15,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { LogOut } from "lucide-react";
 import logoPath from "@assets/NaN-Logotype-05-300x169 (2)_1758899258613.png";
+import { useNotifications } from "@/hooks/useNotifications";
+import { useEffect } from "react";
 import DashboardPage from "@/pages/DashboardPage";
 import ClientsPage from "@/pages/ClientsPage";
 import ServicesPage from "@/pages/ServicesPage";
@@ -42,6 +44,12 @@ function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { initializeNotificationChannels } = useNotifications();
+
+  // Initialize notification channels on app startup
+  useEffect(() => {
+    initializeNotificationChannels();
+  }, []);
 
   const logoutMutation = useMutation({
     mutationFn: () => apiRequest('POST', '/api/auth/logout'),

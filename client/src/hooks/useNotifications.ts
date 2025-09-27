@@ -6,6 +6,23 @@ export function useNotifications() {
   const { toast } = useToast();
   const isNative = Capacitor.isNativePlatform();
 
+  // Initialize notification channels for Android
+  const initializeNotificationChannels = async () => {
+    if (!isNative || Capacitor.getPlatform() !== 'android') return;
+
+    try {
+      await LocalNotifications.createChannel({
+        id: 'pagesa_default',
+        name: 'General Notifications',
+        description: 'General notifications for Pagesa app',
+        importance: 4, // High importance
+        sound: 'default'
+      });
+    } catch (error) {
+      console.error('Failed to create notification channel:', error);
+    }
+  };
+
   // Request notification permissions
   const requestPermissions = async () => {
     if (!isNative) return true;
@@ -60,6 +77,9 @@ export function useNotifications() {
             id: generateNotificationId(),
             schedule: { at: reminderDate },
             sound: 'default',
+            smallIcon: 'ic_launcher',
+            iconColor: '#4F46E5',
+            channelId: 'pagesa_default',
             attachments: undefined,
             actionTypeId: '',
             extra: {
@@ -94,6 +114,9 @@ export function useNotifications() {
             id: generateNotificationId(),
             schedule: { at: new Date(Date.now() + 1000) }, // Show in 1 second
             sound: 'default',
+            smallIcon: 'ic_launcher',
+            iconColor: '#10B981',
+            channelId: 'pagesa_default',
             attachments: undefined,
             actionTypeId: '',
             extra: {
@@ -125,6 +148,9 @@ export function useNotifications() {
             id: generateNotificationId(),
             schedule: { at: new Date(Date.now() + 1000) }, // Show in 1 second
             sound: 'default',
+            smallIcon: 'ic_launcher',
+            iconColor: '#EF4444',
+            channelId: 'pagesa_default',
             attachments: undefined,
             actionTypeId: '',
             extra: {
@@ -167,6 +193,7 @@ export function useNotifications() {
 
   return {
     isNative,
+    initializeNotificationChannels,
     requestPermissions,
     scheduleInvoiceDueReminder,
     notifySyncSuccess,
