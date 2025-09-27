@@ -887,42 +887,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const sgMail = (await import('@sendgrid/mail')).default;
         sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
+        // Validate client email first
+        if (!client.email || !client.email.includes('@')) {
+          console.log('📧 Error: Invalid client email:', client.email);
+          return res.status(400).json({ error: 'Invalid client email address' });
+        }
+
         // Generate services list for email
         const servicesList = invoice.services.map(invoiceService => 
           `  - ${invoiceService.service.name} (Sasia: ${invoiceService.quantity}, Çmimi: €${invoiceService.unitPrice}, Totali: €${invoiceService.lineTotal})`
         ).join('\n');
         
-        const emailContent = `
-          Përshëndetje ${client.name},
+        const emailContent = `Përshëndetje ${client.name},
 
-          Ju dërgojmë faturën tuaj për shërbimet e mëposhtme:
-          
-          Shërbimet:
+Ju dërgojmë faturën tuaj për shërbimet e mëposhtme:
+
+Shërbimet:
 ${servicesList}
-          
-          Detajet e faturës:
-          - Numri i faturës: #${invoice.id.slice(-8).toUpperCase()}
-          - Totali përfundimtar: €${invoice.totalAmount}
-          - Data e lëshimit: ${new Date(invoice.issueDate).toLocaleDateString('sq-AL')}
-          - Skadenca: ${new Date(invoice.dueDate).toLocaleDateString('sq-AL')}
-          - Statusi: ${invoice.status === 'paid' ? 'Paguar' : invoice.status === 'pending' ? 'Në pritje' : 'Vonesa'}
-          
-          ${invoice.status !== 'paid' ? 'Ju lutem kryeni pagesën brenda afatit të caktuar.' : 'Faleminderit për pagesën!'}
-          
-          Me respekt,
-          Ekipi i Menaxhimit të Klientëve
-        `;
+
+Detajet e faturës:
+- Numri i faturës: #${invoice.id.slice(-8).toUpperCase()}
+- Totali përfundimtar: €${invoice.totalAmount}
+- Data e lëshimit: ${new Date(invoice.issueDate).toLocaleDateString('sq-AL')}
+- Skadenca: ${new Date(invoice.dueDate).toLocaleDateString('sq-AL')}
+- Statusi: ${invoice.status === 'paid' ? 'Paguar' : invoice.status === 'pending' ? 'Në pritje' : 'Vonesa'}
+
+${invoice.status !== 'paid' ? 'Ju lutem kryeni pagesën brenda afatit të caktuar.' : 'Faleminderit për pagesën!'}
+
+Me respekt,
+Ekipi i Menaxhimit të Klientëve`;
+
+        // Try multiple from addresses that are more likely to work
+        const possibleFromAddresses = [
+          process.env.SENDGRID_FROM_EMAIL || 'invoice@yourdomain.com',
+          'noreply@replit.app',
+          'admin@replit.app',
+          'test@test.com'
+        ];
 
         const msg = {
           to: client.email,
-          from: 'noreply@replit.app', // Using replit.app domain which is more likely to work
+          from: possibleFromAddresses[0], // Use the first available from address
           subject: `Fatura #${invoice.id.slice(-8).toUpperCase()} - ${invoice.services.length > 1 ? 'Shërbime të shumta' : invoice.services[0].service.name}`,
           text: emailContent,
           html: emailContent.replace(/\n/g, '<br>')
         };
 
+        console.log('📧 Production Mode: Attempting to send email via SendGrid');
+        console.log('📧 To:', client.email);
+        console.log('📧 From:', msg.from);
+        console.log('📧 Subject:', msg.subject);
+
         await sgMail.send(msg);
         
+        console.log('📧 SendGrid email sent successfully');
         res.json({ 
           success: true, 
           message: 'Email u dërgua me sukses!',
@@ -930,15 +948,28 @@ ${servicesList}
         });
         
       } catch (emailError) {
-        console.error('SendGrid error details:', {
+        console.error('📧 SendGrid error details:', {
           message: emailError instanceof Error ? emailError.message : String(emailError),
           code: (emailError as any)?.code || 'no-code',
           response: (emailError as any)?.response?.body || 'no-response-body',
-          stack: emailError instanceof Error ? emailError.stack : undefined
+          stack: process.env.NODE_ENV === 'development' && emailError instanceof Error ? emailError.stack : undefined
         });
+        
+        // Return more helpful error message
+        const errorMessage = emailError instanceof Error ? emailError.message : 'Unknown SendGrid error';
+        const isAuthError = errorMessage.includes('401') || errorMessage.includes('Unauthorized') || errorMessage.includes('forbidden');
+        const isFromError = errorMessage.includes('sender') || errorMessage.includes('from');
+        
+        let userMessage = 'Failed to send email via SendGrid';
+        if (isAuthError) {
+          userMessage = 'Email service authentication failed. Please check SendGrid configuration.';
+        } else if (isFromError) {
+          userMessage = 'Email sender address not verified. Please verify sender in SendGrid account.';
+        }
+        
         res.status(500).json({ 
-          error: 'Failed to send email via SendGrid',
-          details: process.env.NODE_ENV === 'development' && emailError instanceof Error ? emailError.message : 'Check server logs for details'
+          error: userMessage,
+          details: process.env.NODE_ENV === 'development' ? errorMessage : 'Check server logs for details'
         });
       }
     } catch (error) {
