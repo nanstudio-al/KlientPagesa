@@ -803,21 +803,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/invoices/:id/send-email", async (req, res) => {
     try {
       const { id } = req.params;
+      
+      // Enhanced logging for debugging
+      if (isDevelopment) {
+        console.log('📧 Email send request received for invoice ID:', id);
+      }
+      
       const invoice = await storage.getInvoice(id);
       
       if (!invoice) {
+        console.log('📧 Error: Invoice not found for ID:', id);
         return res.status(404).json({ error: 'Invoice not found' });
+      }
+
+      if (isDevelopment) {
+        console.log('📧 Invoice found:', {
+          id: invoice.id,
+          clientId: invoice.clientId,
+          servicesCount: invoice.services?.length || 0,
+          hasServices: Array.isArray(invoice.services)
+        });
       }
 
       // Get client details (services are already included in InvoiceWithServices)
       const client = await storage.getClient(invoice.clientId);
       
       if (!client) {
+        console.log('📧 Error: Client not found for ID:', invoice.clientId);
         return res.status(404).json({ error: 'Client not found' });
       }
       
-      if (invoice.services.length === 0) {
+      // Check if services exist and are properly structured
+      if (!invoice.services || !Array.isArray(invoice.services) || invoice.services.length === 0) {
+        console.log('📧 Error: Invoice has no services or malformed services:', {
+          services: invoice.services,
+          isArray: Array.isArray(invoice.services),
+          length: invoice.services?.length
+        });
         return res.status(400).json({ error: 'Invoice has no services' });
+      }
+
+      // Validate service structure
+      try {
+        const firstService = invoice.services[0];
+        if (!firstService || !firstService.service || !firstService.service.name) {
+          console.log('📧 Error: Malformed service structure:', firstService);
+          return res.status(400).json({ error: 'Invoice services are malformed' });
+        }
+      } catch (serviceError) {
+        console.log('📧 Error validating service structure:', serviceError);
+        return res.status(400).json({ error: 'Invoice services are malformed' });
       }
 
       // Development mode fallback - simulate email sending without SendGrid
