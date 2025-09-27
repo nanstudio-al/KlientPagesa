@@ -2,6 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Mobile optimizations for touch interfaces */
+@layer base {
+  /* Improve touch targets for mobile */
+  button, [role="button"], input, select, textarea {
+    min-height: 44px; /* iOS recommended touch target size */
+    touch-action: manipulation; /* Disable double-tap zoom */
+  }
+  
+  /* Smooth scrolling for mobile */
+  html {
+    scroll-behavior: smooth;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Prevent text selection on touch devices */
+  .no-select {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+  
+  /* Mobile-friendly table scrolling */
+  .mobile-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Large touch-friendly checkboxes */
+  .mobile-checkbox {
+    width: 20px;
+    height: 20px;
+  }
+}
+
 /* LIGHT MODE */
 :root {
   --button-outline: rgba(0,0,0, .10);
