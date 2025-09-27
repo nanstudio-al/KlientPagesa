@@ -22,6 +22,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -99,6 +100,9 @@ export function InvoiceForm({ isOpen, onOpenChange, onSubmit, title = "Faturë e
       <DialogContent className="sm:max-w-md" data-testid="dialog-invoice-form">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>
+            Krijo një faturë të re duke zgjedhur klientin dhe shërbimet
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">

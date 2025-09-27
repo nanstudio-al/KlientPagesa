@@ -23,6 +23,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -90,6 +91,9 @@ export function ServiceForm({ isOpen, onOpenChange, onSubmit, initialData, title
       <DialogContent className="sm:max-w-md" data-testid="dialog-service-form">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>
+            {initialData ? "Modifiko të dhënat e shërbimit" : "Shto një shërbim të ri në sistem"}
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">

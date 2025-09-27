@@ -25,7 +25,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? ["'self'", "'unsafe-inline'", "fonts.googleapis.com"] // Allow inline styles and Google Fonts for Vite dev
           : ["'self'", "fonts.googleapis.com"], 
         scriptSrc: isDevelopment 
-          ? ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://replit.com"] // Allow inline scripts, eval and Replit dev banner
+          ? ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://replit.com", "https://*.replit.com"] // Allow inline scripts, eval and Replit dev banner
           : ["'self'"],
         imgSrc: ["'self'", "data:", "https:"],
         connectSrc: isDevelopment 

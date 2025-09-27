@@ -18,6 +18,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -96,6 +97,9 @@ export function ClientForm({ isOpen, onOpenChange, onSubmit, initialData, title 
       <DialogContent className="sm:max-w-md" data-testid="dialog-client-form">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>
+            {initialData ? "Modifiko të dhënat e klientit" : "Shto një klient të ri në sistem"}
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
