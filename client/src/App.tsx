@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AppSidebar } from "@/components/AppSidebar";
+import { NetworkStatus } from "@/components/NetworkStatus";
 import { useAuth } from "@/hooks/useAuth";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -100,6 +101,7 @@ function AppContent() {
               />
             </div>
             <div className="flex items-center gap-2">
+              <NetworkStatus />
               <Button
                 variant="ghost"
                 size="sm"

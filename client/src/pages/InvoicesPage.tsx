@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { InvoiceCard } from "@/components/InvoiceCard";
 import { InvoiceForm } from "@/components/InvoiceForm";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Plus, Search, Filter, AlertCircle, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { Plus, Search, Filter, AlertCircle, ChevronLeft, ChevronRight, Calendar, Share, Download, Mail, Eye } from "lucide-react";
 import {
   Select,
   SelectContent,

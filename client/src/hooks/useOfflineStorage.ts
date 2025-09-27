@@ -195,7 +195,8 @@ export function useOfflineStorage() {
           switch (action.type) {
             case 'CREATE':
               method = 'POST';
-              const result = await apiRequest(method, endpoint, action.data);
+              const response = await apiRequest(method, endpoint, action.data);
+              const result = await response.json();
               
               // Update temp ID with real ID in cache
               if (result && result.id && action.data.tempId) {
