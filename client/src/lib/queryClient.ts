@@ -12,9 +12,23 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  // Build headers including CSRF protection
+  const headers: Record<string, string> = {};
+  
+  // Add Content-Type for requests with data
+  if (data) {
+    headers["Content-Type"] = "application/json";
+  }
+  
+  // Add Origin header for CSRF protection on state-changing requests
+  const stateChangingMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
+  if (stateChangingMethods.includes(method.toUpperCase())) {
+    headers["Origin"] = window.location.origin;
+  }
+
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers,
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
