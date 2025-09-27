@@ -917,17 +917,12 @@ ${invoice.status !== 'paid' ? 'Ju lutem kryeni pagesën brenda afatit të caktua
 Me respekt,
 Ekipi i Menaxhimit të Klientëve`;
 
-        // Try multiple from addresses that are more likely to work
-        const possibleFromAddresses = [
-          process.env.SENDGRID_FROM_EMAIL || 'invoice@yourdomain.com',
-          'noreply@replit.app',
-          'admin@replit.app',
-          'test@test.com'
-        ];
+        // Use the verified sender email address
+        const fromEmail = 'noreply@pagesa.sentinel.vip';
 
         const msg = {
           to: client.email,
-          from: possibleFromAddresses[0], // Use the first available from address
+          from: fromEmail,
           subject: `Fatura #${invoice.id.slice(-8).toUpperCase()} - ${invoice.services.length > 1 ? 'Shërbime të shumta' : invoice.services[0].service.name}`,
           text: emailContent,
           html: emailContent.replace(/\n/g, '<br>')
@@ -935,7 +930,7 @@ Ekipi i Menaxhimit të Klientëve`;
 
         console.log('📧 Production Mode: Attempting to send email via SendGrid');
         console.log('📧 To:', client.email);
-        console.log('📧 From:', msg.from);
+        console.log('📧 From:', fromEmail);
         console.log('📧 Subject:', msg.subject);
 
         await sgMail.send(msg);
