@@ -1,8 +1,9 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "./StatusBadge";
-import { Calendar, FileText, Download, Mail, Package, Euro } from "lucide-react";
+import { Calendar, FileText, Download, Mail, Package, Euro, Share } from "lucide-react";
 import type { InvoiceWithServices } from "@shared/schema";
+import { useNativeFeatures } from "@/hooks/useNativeFeatures";
 
 interface InvoiceCardProps {
   invoice: InvoiceWithServices & {
@@ -12,9 +13,11 @@ interface InvoiceCardProps {
   onMarkPaid: () => void;
   onSendEmail: () => void;
   onDownload: () => void;
+  onShare?: () => void;
 }
 
-export function InvoiceCard({ invoice, onMarkPaid, onSendEmail, onDownload }: InvoiceCardProps) {
+export function InvoiceCard({ invoice, onMarkPaid, onSendEmail, onDownload, onShare }: InvoiceCardProps) {
+  const { isNative } = useNativeFeatures();
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleDateString('sq-AL');
   };
@@ -140,6 +143,17 @@ export function InvoiceCard({ invoice, onMarkPaid, onSendEmail, onDownload }: In
           >
             <Download className="w-4 h-4" />
           </Button>
+          {/* Native sharing button for mobile */}
+          {isNative && onShare && (
+            <Button 
+              onClick={onShare}
+              variant="outline" 
+              size="sm"
+              data-testid={`button-share-${invoice.id}`}
+            >
+              <Share className="w-4 h-4" />
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>
