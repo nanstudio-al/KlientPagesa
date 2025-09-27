@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>VPS Migration Guide - Albanian Payment Management System</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #2563eb;
+      border-bottom: 3px solid #2563eb;
+      padding-bottom: 10px;
+      page-break-before: always;
+    }
+    h1:first-of-type {
+      page-break-before: auto;
+    }
+    h2 {
+      color: #1d4ed8;
+      margin-top: 30px;
+      margin-bottom: 15px;
+      page-break-after: avoid;
+    }
+    h3 {
+      color: #1e40af;
+      margin-top: 25px;
+      margin-bottom: 10px;
+      page-break-after: avoid;
+    }
+    code {
+      background-color: #f3f4f6;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 0.9em;
+    }
+    pre {
+      background-color: #1f2937;
+      color: #f9fafb;
+      padding: 15px;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 15px 0;
+      page-break-inside: avoid;
+    }
+    pre code {
+      background: none;
+      color: inherit;
+      padding: 0;
+    }
+    hr {
+      border: none;
+      border-top: 2px solid #e5e7eb;
+      margin: 30px 0;
+      page-break-after: avoid;
+    }
+    .highlight {
+      background-color: #fef3c7;
+      padding: 15px;
+      border-left: 4px solid #f59e0b;
+      margin: 15px 0;
+      border-radius: 0 8px 8px 0;
+      page-break-inside: avoid;
+    }
+    ul, ol {
+      margin: 10px 0;
+    }
+    li {
+      margin: 5px 0;
+    }
+    strong {
+      color: #1f2937;
+    }
+    .step-box {
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      page-break-inside: avoid;
+    }
+    .warning {
+      background-color: #fef2f2;
+      border-left: 4px solid #ef4444;
+      padding: 15px;
+      margin: 15px 0;
+      border-radius: 0 8px 8px 0;
+    }
+    .success {
+      background-color: #f0fdf4;
+      border-left: 4px solid #22c55e;
+      padding: 15px;
+      margin: 15px 0;
+      border-radius: 0 8px 8px 0;
+    }
+    @page {
+      margin: 0.75in;
+      size: A4;
+    }
+    @media print {
+      body { font-size: 12px; }
+      h1 { font-size: 18px; }
+      h2 { font-size: 16px; }
+      h3 { font-size: 14px; }
+      pre { font-size: 10px; }
+    }
+  </style>
+</head>
+<body>
+
+<h1>VPS Migration Guide</h1>
+<h2>Albanian Payment Management System</h2>
+<p><strong>Complete Step-by-Step Migration from Replit to VPS</strong></p>
+
+<div class="highlight">
+<strong>Overview:</strong> This guide will help you migrate your Albanian customer and payment management application from Replit to your own VPS server. You'll save money on hosting costs and have full control over your infrastructure.
+</div>
+
+<hr>
+
+<div class="step-box">
+<h2>Step 1: Export Your Project from Replit</h2>
+
+<h3>Download Your Code:</h3>
+<ol>
+  <li>In your Replit project, go to the <strong>File</strong> menu</li>
+  <li>Click <strong>"Download as Zip"</strong></li>
+  <li>Save the zip file to your computer</li>
+  <li>Extract the zip file to a folder (e.g., <code>pagesa-app</code>)</li>
+</ol>
+
+<h3>Alternative - Using Git:</h3>
+<pre><code># On your computer, clone from Replit
+git clone https://replit.com/@yourusername/your-project-name.git</code></pre>
+</div>
+
+<hr>
+
+<div class="step-box">
+<h2>Step 2: Prepare Your VPS</h2>
+
+<h3>Connect to your VPS:</h3>
+<pre><code>ssh root@your-vps-ip
+# or
+ssh username@your-vps-ip</code></pre>
+
+<h3>Update and install dependencies:</h3>
+<pre><code># Update system
+apt update && apt upgrade -y
+
+# Install Node.js 20
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+apt-get install -y nodejs
+
+# Install PostgreSQL
+apt install postgresql postgresql-contrib -y
+
+# Install Nginx
+apt install nginx -y
+
+# Install PM2 (process manager)
+npm install -g pm2
+
+# Install certbot for SSL
+apt install certbot python3-certbot-nginx -y
+
+# Install unzip (for uploading files)
+apt install unzip -y</code></pre>
+</div>
+
+<hr>
+
+<div class="step-box">
+<h2>Step 3: Upload Your Files</h2>
+
+<h3>Create app directory:</h3>
+<pre><code>mkdir -p /var/www/pagesa
+cd /var/www/pagesa</code></pre>
+
+<h3>Upload your files (choose one method):</h3>
+
+<h4>Method A - Using SCP:</h4>
+<pre><code># From your computer (in terminal/command prompt)
+scp -r /path/to/your/extracted/project/* root@your-vps-ip:/var/www/pagesa/</code></pre>
+
+<h4>Method B - Using ZIP upload:</h4>
+<pre><code># Upload the zip file to your VPS first, then:
+cd /var/www/pagesa
+unzip your-project.zip
+mv your-project-folder/* .
+rm -rf your-project-folder your-project.zip</code></pre>
+
+<h3>Set correct permissions:</h3>
+<pre><code>chown -R www-data:www-data /var/www/pagesa
+chmod -R 755 /var/www/pagesa</code></pre>
+</div>
+
+<hr>
+
+<div class="step-box">
+<h2>Step 4: Setup Database</h2>
+
+<h3>Configure PostgreSQL:</h3>
+<pre><code># Switch to postgres user
+sudo -u postgres psql
+
+# Create database and user
+CREATE DATABASE pagesa_db;
+CREATE USER pagesa_user WITH PASSWORD 'your_secure_password_here';
+GRANT ALL PRIVILEGES ON DATABASE pagesa_db TO pagesa_user;
+\q</code></pre>
+</div>
+
+<hr>
+
+<div class="step-box">
+<h2>Step 5: Install Dependencies & Setup Environment</h2>
+
+<h3>Install project dependencies:</h3>
+<pre><code>cd /var/www/pagesa
+npm install</code></pre>
+
+<h3>Create production environment file:</h3>
+<pre><code>nano .env</code></pre>
+
+<h3>Add these environment variables:</h3>
+<pre><code>DATABASE_URL=postgresql://pagesa_user:your_secure_password_here@localhost:5432/pagesa_db
+SESSION_SECRET=your_very_long_secure_session_secret_here
+SENDGRID_API_KEY=your_sendgrid_api_key_here
+ADMIN_PASSWORD=your_admin_password_here
+NODE_ENV=production
+PORT=3000</code></pre>
+
+<h3>Setup database schema:</h3>
+<pre><code>npm run db:push</code></pre>
+</div>
+
+<hr>
+
+<div class="step-box">
+<h2>Step 6: Build the Application</h2>
+
+<pre><code># Build the frontend
+npm run build
+
+# Test if it runs
+npm start</code></pre>
+
+<div class="warning">
+<strong>Note:</strong> Press Ctrl+C to stop the test, then continue...
+</div>
+</div>
+
+<hr>
+
+<div class="step-box">
+<h2>Step 7: Setup PM2 Process Manager</h2>
+
+<h3>Create PM2 configuration:</h3>
+<pre><code>nano ecosystem.config.js</code></pre>
+
+<h3>Add this configuration:</h3>
+<pre><code>module.exports = {
+  apps: [{
+    name: 'pagesa-app',
+    script: 'npm',
+    args: 'start',
+    cwd: '/var/www/pagesa',
+    env: {
+      NODE_ENV: 'production',
+      PORT: 3000
+    },
+    instances: 1,
+    autorestart: true,
+    watch: false,
+    max_memory_restart: '1G',
+    error_file: '/var/log/pm2/pagesa-error.log',
+    out_file: '/var/log/pm2/pagesa-out.log',
+    log_file: '/var/log/pm2/pagesa.log'
+  }]
+}</code></pre>
+
+<h3>Start the application:</h3>
+<pre><code># Create log directory
+mkdir -p /var/log/pm2
+
+# Start with PM2
+pm2 start ecosystem.config.js
+
+# Save PM2 configuration
+pm2 save
+
+# Setup PM2 to start on boot
+pm2 startup
+# Follow the instructions it gives you
+
+# Check if running
+pm2 status</code></pre>
+</div>
+
+<hr>
+
+<div class="step-box">
+<h2>Step 8: Configure Nginx</h2>
+
+<h3>Create Nginx configuration:</h3>
+<pre><code>nano /etc/nginx/sites-available/pagesa</code></pre>
+
+<h3>Add this configuration:</h3>
+<pre><code>server {
+    listen 80;
+    server_name your-domain.com www.your-domain.com;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}</code></pre>
+
+<h3>Enable the site:</h3>
+<pre><code># Enable the site
+ln -s /etc/nginx/sites-available/pagesa /etc/nginx/sites-enabled/
+
+# Remove default site
+rm /etc/nginx/sites-enabled/default
+
+# Test configuration
+nginx -t
+
+# Restart Nginx
+systemctl restart nginx</code></pre>
+</div>
+
+<hr>
+
+<div class="step-box">
+<h2>Step 9: Setup SSL Certificate</h2>
+
+<pre><code># Get SSL certificate (replace with your domain)
+certbot --nginx -d your-domain.com -d www.your-domain.com
+
+# Test auto-renewal
+certbot renew --dry-run</code></pre>
+</div>
+
+<hr>
+
+<div class="step-box">
+<h2>Step 10: Setup Firewall</h2>
+
+<pre><code># Configure firewall
+ufw allow ssh
+ufw allow 'Nginx Full'
+ufw enable</code></pre>
+</div>
+
+<hr>
+
+<div class="step-box">
+<h2>Step 11: Update Mobile Apps</h2>
+
+<h3>Update your mobile app configuration:</h3>
+<p>Edit <code>capacitor.config.ts</code> in your project:</p>
+<pre><code>server: {
+  url: 'https://your-domain.com',
+  cleartext: false
+}</code></pre>
+
+<h3>Rebuild mobile apps:</h3>
+<pre><code># On your development machine
+npx cap sync
+npx cap open ios     # For iOS
+npx cap open android # For Android</code></pre>
+</div>
+
+<hr>
+
+<div class="step-box">
+<h2>Step 12: Monitoring & Maintenance</h2>
+
+<h3>Useful commands for monitoring:</h3>
+<pre><code># View application logs
+pm2 logs pagesa-app
+
+# Monitor processes
+pm2 monit
+
+# Restart application
+pm2 restart pagesa-app
+
+# View Nginx logs
+tail -f /var/log/nginx/access.log
+tail -f /var/log/nginx/error.log
+
+# Check database
+sudo -u postgres psql pagesa_db</code></pre>
+</div>
+
+<hr>
+
+<div class="step-box">
+<h2>Quick Troubleshooting</h2>
+
+<h3>If app doesn't start:</h3>
+<pre><code>pm2 logs pagesa-app</code></pre>
+
+<h3>If database connection fails:</h3>
+<pre><code>sudo -u postgres psql
+\l  # List databases
+\q</code></pre>
+
+<h3>If Nginx fails:</h3>
+<pre><code>nginx -t
+systemctl status nginx</code></pre>
+</div>
+
+<hr>
+
+<div class="step-box">
+<h2>Verification Steps</h2>
+
+<ol>
+  <li><strong>Check if app is running:</strong> <code>pm2 status</code></li>
+  <li><strong>Test website:</strong> Visit <code>http://your-domain.com</code></li>
+  <li><strong>Check SSL:</strong> Visit <code>https://your-domain.com</code></li>
+  <li><strong>Test login:</strong> Try logging into your app</li>
+  <li><strong>Check mobile:</strong> Test mobile app with new server URL</li>
+</ol>
+</div>
+
+<hr>
+
+<div class="success">
+<h2>Cost Benefits</h2>
+<ul>
+  <li><strong>VPS:</strong> $5-20/month (DigitalOcean, Linode)</li>
+  <li><strong>Domain:</strong> $10-15/year</li>
+  <li><strong>SSL:</strong> Free (Let's Encrypt)</li>
+  <li><strong>Total:</strong> ~$6-25/month</li>
+</ul>
+<p><strong>Compared to Replit hosting costs, you'll save significantly while gaining full control!</strong></p>
+</div>
+
+<hr>
+
+<div class="highlight">
+<h2>Support</h2>
+<p>Your Albanian payment management app should now be running successfully on your VPS!</p>
+
+<h3>Key Benefits:</h3>
+<ul>
+  <li>Full control over your infrastructure</li>
+  <li>Significant cost savings</li>
+  <li>Better performance</li>
+  <li>Ready for SaaS expansion</li>
+  <li>Professional hosting setup</li>
+</ul>
+
+<h3>Next Steps:</h3>
+<ul>
+  <li>Monitor your application performance</li>
+  <li>Set up automated backups</li>
+  <li>Consider implementing the SaaS multi-tenant features we discussed</li>
+</ul>
+
+<p><strong>Your app is now production-ready and hosted on your own infrastructure! 🎉</strong></p>
+</div>
+
+</body>
+</html>
